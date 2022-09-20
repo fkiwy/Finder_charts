@@ -1,6 +1,6 @@
 # Finder_charts
 
-[![DOI](https://zenodo.org/badge/538641005.svg)](https://zenodo.org/badge/latestdoi/538641005)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7097859.svg)](https://doi.org/10.5281/zenodo.7097859)
 
 Finder_chatrs is a Python module to create finder charts from image data of following sky surveys:
 - DSS (DSS1 B, DSS1 R, DSS2 B, DSS2 R, DSS2 IR),
