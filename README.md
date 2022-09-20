@@ -18,7 +18,7 @@ The code only takes two mandatory arguments, RA and Dec in decimal degrees, whic
 This is a minimal usage example:
 ```
 from Finder_charts import create_finder_charts
-create_finder_charts(1.234, 0.123)
+create_finder_charts(16.9701886, 0.6992208)
 ```
 
 Parameter description:
@@ -42,3 +42,9 @@ Parameter description:
 - ```show_progress``` : whether to show the file download progress (type: bool, default: True)
 - ```timeout``` : timeout for remote requests in seconds (type: int, default: 300 sec)
 - ```open_pdf``` : whether to open the saved result PDF file(s) (type: bool, default: True)
+
+Example output:
+![Example output](example_output.png)
+
+With catalog overlays:
+![Example output](example_output_with_overlays.png)
