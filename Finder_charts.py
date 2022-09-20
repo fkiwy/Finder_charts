@@ -38,84 +38,93 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
     def finder_charts(ra, dec):
 
         def create_image(hdu, img_idx, band, year_obs, ora=None, odec=None, ophot=None):
-            data = hdu.data
+            try:
+                data = hdu.data
 
-            nanValues = np.count_nonzero(np.isnan(data))
-            totValues = np.count_nonzero(data)
+                nanValues = np.count_nonzero(np.isnan(data))
+                totValues = np.count_nonzero(data)
 
-            if nanValues < totValues * 0.5:
-                wcs, shape = find_optimal_celestial_wcs([hdu], frame='icrs')
-                data, _ = reproject_interp(hdu, wcs, shape_out=shape)
+                if nanValues < totValues * 0.5:
+                    wcs, shape = find_optimal_celestial_wcs([hdu], frame='icrs')
+                    data, _ = reproject_interp(hdu, wcs, shape_out=shape)
 
-                position = SkyCoord(ra*u.deg, dec*u.deg)
-                cutout = Cutout2D(data, position, img_size*u.arcsec, wcs=wcs, mode='partial')
-                data = cutout.data
-                wcs = cutout.wcs
+                    position = SkyCoord(ra*u.deg, dec*u.deg)
+                    cutout = Cutout2D(data, position, img_size*u.arcsec, wcs=wcs, mode='partial')
+                    data = cutout.data
+                    wcs = cutout.wcs
 
-                ax = fig.add_subplot(rows, cols, img_idx, projection=wcs)
-                x, y = wcs.world_to_pixel(position)
-                ax.plot(x, y, 'ro', fillstyle='none', markersize=7, markeredgewidth=0.2)
-                ax.plot(x, y, 'ro', fillstyle='none', markersize=0.2, markeredgewidth=0.2)
-                ax.text(0.04, 0.91, band, color='black', fontsize=1.8, transform=ax.transAxes,
-                        bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
-                ax.text(0.04, 0.05, year_obs, color='black', fontsize=1.8, transform=ax.transAxes,
-                        bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
-                ax.add_patch(Rectangle((0, 0), 1, 1, fill=False, lw=0.2, ec='black', transform=ax.transAxes))
+                    ax = fig.add_subplot(rows, cols, img_idx, projection=wcs)
+                    x, y = wcs.world_to_pixel(position)
+                    ax.plot(x, y, 'ro', fillstyle='none', markersize=7, markeredgewidth=0.2)
+                    ax.plot(x, y, 'ro', fillstyle='none', markersize=0.2, markeredgewidth=0.2)
+                    ax.text(0.04, 0.91, band, color='black', fontsize=1.8, transform=ax.transAxes,
+                            bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
+                    ax.text(0.04, 0.05, year_obs, color='black', fontsize=1.8, transform=ax.transAxes,
+                            bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
+                    ax.add_patch(Rectangle((0, 0), 1, 1, fill=False, lw=0.2, ec='black', transform=ax.transAxes))
 
-                if ora is not None and odec is not None and ophot is not None:
-                    ax.scatter(ora, odec, transform=ax.get_transform('icrs'), s=0/ophot + 1.0,
-                               edgecolor=overlay_color, facecolor='none', linewidths=0.2)
+                    if ora is not None and odec is not None and ophot is not None:
+                        ax.scatter(ora, odec, transform=ax.get_transform('icrs'), s=0/ophot + 1.0,
+                                   edgecolor=overlay_color, facecolor='none', linewidths=0.2)
 
-                vmin, vmax = get_min_max(data)
-                ax.imshow(data, vmin=vmin, vmax=vmax, cmap='gray_r')
-                ax.axis('off')
-                return 1, data, x, y
-            else:
+                    vmin, vmax = get_min_max(data)
+                    ax.imshow(data, vmin=vmin, vmax=vmax, cmap='gray_r')
+                    ax.axis('off')
+                    return 1, data, x, y
+                else:
+                    return 0, None, 0, 0
+            except:
+                print('A problem occurred while creating an image for object ra={ra}, dec={dec}, band={band}'.format(ra=ra, dec=dec, band=band))
+                print(traceback.format_exc())
                 return 0, None, 0, 0
 
         def create_color_image(r, g, b, img_idx, band, x, y, neowise=False, year_obs=None):
-            if r is None or g is None or b is None:
-                return
+            try:
+                if r is None or g is None or b is None:
+                    return
 
-            xmin = min([r.shape[0], g.shape[0], b.shape[0]])
-            ymin = min([r.shape[1], g.shape[1], b.shape[1]])
+                xmin = min([r.shape[0], g.shape[0], b.shape[0]])
+                ymin = min([r.shape[1], g.shape[1], b.shape[1]])
 
-            xmax = max([r.shape[0], g.shape[0], b.shape[0]])
-            ymax = max([r.shape[1], g.shape[1], b.shape[1]])
+                xmax = max([r.shape[0], g.shape[0], b.shape[0]])
+                ymax = max([r.shape[1], g.shape[1], b.shape[1]])
 
-            if xmax - xmin > 2 or ymax - ymin > 2:
-                print('Array shapes too different to create a color image for', band, '-> R shape:',
-                      r.shape, 'G shape:', g.shape, 'B shape:', b.shape)
-                return
+                if xmax - xmin > 2 or ymax - ymin > 2:
+                    print('Array shapes too different to create a color image for', band, '-> R shape:',
+                          r.shape, 'G shape:', g.shape, 'B shape:', b.shape)
+                    return
 
-            r = r[0:xmin, 0:ymin]
-            g = g[0:xmin, 0:ymin]
-            b = b[0:xmin, 0:ymin]
+                r = r[0:xmin, 0:ymin]
+                g = g[0:xmin, 0:ymin]
+                b = b[0:xmin, 0:ymin]
 
-            if neowise:
-                # _, vmin, vmax = sigma_clip(g, sigma_lower=1, sigma_upper=5, maxiters=None, return_bounds=True)
-                vmin, vmax = get_min_max(g, lo=neowise_contrast, hi=100-neowise_contrast)
-                rgb = Image.fromarray(make_lupton_rgb(r, g, b, stretch=vmax-vmin, Q=0, minimum=vmin))
-            else:
-                r = Image.fromarray(create_lupton_rgb(r)).convert("L")
-                g = Image.fromarray(create_lupton_rgb(g)).convert("L")
-                b = Image.fromarray(create_lupton_rgb(b)).convert("L")
-                rgb = Image.merge("RGB", (r, g, b))
+                if neowise:
+                    # _, vmin, vmax = sigma_clip(g, sigma_lower=1, sigma_upper=5, maxiters=None, return_bounds=True)
+                    vmin, vmax = get_min_max(g, lo=neowise_contrast, hi=100-neowise_contrast)
+                    rgb = Image.fromarray(make_lupton_rgb(r, g, b, stretch=vmax-vmin, Q=0, minimum=vmin))
+                else:
+                    r = Image.fromarray(create_lupton_rgb(r)).convert("L")
+                    g = Image.fromarray(create_lupton_rgb(g)).convert("L")
+                    b = Image.fromarray(create_lupton_rgb(b)).convert("L")
+                    rgb = Image.merge("RGB", (r, g, b))
 
-            ax = fig.add_subplot(rows, cols, img_idx)
-            ax.plot(x, y, 'ro', fillstyle='none', markersize=7, markeredgewidth=0.2)
-            ax.plot(x, y, 'ro', fillstyle='none', markersize=0.2, markeredgewidth=0.2)
-            ax.text(0.04, 0.91, band, color='black', fontsize=1.8, transform=ax.transAxes,
-                    bbox=dict(facecolor='white', alpha=0.7, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
-            ax.add_patch(Rectangle((0, 0), 1, 1, fill=False, lw=0.2, ec='black', transform=ax.transAxes))
+                ax = fig.add_subplot(rows, cols, img_idx)
+                ax.plot(x, y, 'ro', fillstyle='none', markersize=7, markeredgewidth=0.2)
+                ax.plot(x, y, 'ro', fillstyle='none', markersize=0.2, markeredgewidth=0.2)
+                ax.text(0.04, 0.91, band, color='black', fontsize=1.8, transform=ax.transAxes,
+                        bbox=dict(facecolor='white', alpha=0.7, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
+                ax.add_patch(Rectangle((0, 0), 1, 1, fill=False, lw=0.2, ec='black', transform=ax.transAxes))
 
-            if year_obs:
-                ax.text(0.04, 0.05, year_obs, color='black', fontsize=1.8, transform=ax.transAxes,
-                        bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
-                rgb = ImageOps.invert(rgb)
+                if year_obs:
+                    ax.text(0.04, 0.05, year_obs, color='black', fontsize=1.8, transform=ax.transAxes,
+                            bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
+                    rgb = ImageOps.invert(rgb)
 
-            ax.imshow(rgb, origin='lower')
-            ax.axis('off')
+                ax.imshow(rgb, origin='lower')
+                ax.axis('off')
+            except:
+                print('A problem occurred while creating a color image for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                print(traceback.format_exc())
 
         def create_lupton_rgb(data):
             vmin, vmax = get_min_max(data)
@@ -151,16 +160,18 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             try:
                 return Ukidss.get_images(SkyCoord(ra, dec, unit=(u.deg, u.deg)), image_width=size * u.arcsec, database=database,
                                          waveband=band, frame_type='stack', verbose=False, show_progress=show_progress)
-            except Exception as e:
-                print('A problem occurred while downloading UKIDSS images for band', band, '===>', e)
+            except:
+                print('A problem occurred while downloading UKIDSS images for object ra={ra}, dec={dec}, band={band}'.format(ra=ra, dec=dec, band=band))
+                print(traceback.format_exc())
                 return None
 
         def get_VHS_image(ra, dec, band, size):
             try:
                 return Vsa.get_images(SkyCoord(ra, dec, unit=(u.deg, u.deg)), image_width=size * u.arcsec, database='VHSDR6',
                                       waveband=band, frame_type='tilestack', verbose=False, show_progress=show_progress)
-            except Exception as e:
-                print('A problem occurred while downloading VHS images for band', band, '===>', e)
+            except:
+                print('A problem occurred while downloading VHS images for object ra={ra}, dec={dec}, band={band}'.format(ra=ra, dec=dec, band=band))
+                print(traceback.format_exc())
                 return None
 
         def get_DECam_image(ra, dec, band, size):
@@ -178,8 +189,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     return image, instrument
                 else:
                     return None, None
-            except Exception as e:
-                print('A problem occurred while downloading DECam images for band', band, '===>', e)
+            except:
+                print('A problem occurred while downloading DECam images for object ra={ra}, dec={dec}, band={band}'.format(ra=ra, dec=dec, band=band))
+                print(traceback.format_exc())
                 return None, None
 
         def search_noirlab(ra, dec, radius):
@@ -204,8 +216,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     return table
                 else:
                     return None
-            except Exception as e:
-                print('A problem occurred while downloading Noirlab catalog overlays ===>', e)
+            except Exception:
+                print('A problem occurred while downloading Noirlab catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                print(traceback.format_exc())
                 return None
 
         def get_year_obs(hdu, date_obs_key, date_pattern):
@@ -303,15 +316,19 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             date_pattern = '%y%m%d'
 
             if overlays:
-                v = Vizier(columns=['RAJ2000', 'DEJ2000', 'Jmag', 'Hmag',  'Kmag'])
-                tables = v.query_region(coords, radius=radius, catalog='II/246/out')
-                if tables:
-                    table = tables[0]
-                    ora = table['RAJ2000']
-                    odec = table['DEJ2000']
-                    op1 = table['Jmag']
-                    op2 = table['Hmag']
-                    op3 = table['Kmag']
+                try:
+                    v = Vizier(columns=['RAJ2000', 'DEJ2000', 'Jmag', 'Hmag',  'Kmag'])
+                    tables = v.query_region(coords, radius=radius, catalog='II/246/out')
+                    if tables:
+                        table = tables[0]
+                        ora = table['RAJ2000']
+                        odec = table['DEJ2000']
+                        op1 = table['Jmag']
+                        op2 = table['Hmag']
+                        op3 = table['Kmag']
+                except:
+                    print('A problem occurred while downloading 2MASS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                    print(traceback.format_exc())
 
             image = get_IRSA_image(ra, dec, '2mass', 'twomass_bands=j', img_size)
             if image:
@@ -413,16 +430,20 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             date_pattern = '%Y-%m-%d'
 
             if overlays:
-                v = Vizier(columns=['RAJ2000', 'DEJ2000', 'W1mag', 'W2mag', 'W3mag', 'W4mag'])
-                tables = v.query_region(coords, radius=radius, catalog='II/328/allwise')
-                if tables:
-                    table = tables[0]
-                    ora = table['RAJ2000']
-                    odec = table['DEJ2000']
-                    op1 = table['W1mag']
-                    op2 = table['W2mag']
-                    op3 = table['W3mag']
-                    op4 = table['W4mag']
+                try:
+                    v = Vizier(columns=['RAJ2000', 'DEJ2000', 'W1mag', 'W2mag', 'W3mag', 'W4mag'])
+                    tables = v.query_region(coords, radius=radius, catalog='II/328/allwise')
+                    if tables:
+                        table = tables[0]
+                        ora = table['RAJ2000']
+                        odec = table['DEJ2000']
+                        op1 = table['W1mag']
+                        op2 = table['W2mag']
+                        op3 = table['W3mag']
+                        op4 = table['W4mag']
+                except:
+                    print('A problem occurred while downloading 2MASS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                    print(traceback.format_exc())
 
             image = get_IRSA_image(ra, dec, 'wise', 'wise_bands=1', img_size)
             if image:
@@ -463,14 +484,18 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             date_pattern = '%Y-%m-%d'
 
             if overlays:
-                table = Ukidss.query_region(coords, radius, database='UKIDSSDR11PLUS', programme_id='LAS')
-                if table:
-                    ora = table['ra']
-                    odec = table['dec']
-                    op1 = table['yAperMag3']
-                    op2 = table['jAperMag3']
-                    op3 = table['hAperMag3']
-                    op4 = table['kAperMag3']
+                try:
+                    table = Ukidss.query_region(coords, radius, database='UKIDSSDR11PLUS', programme_id='LAS')
+                    if table:
+                        ora = table['ra']
+                        odec = table['dec']
+                        op1 = table['yAperMag3']
+                        op2 = table['jAperMag3']
+                        op3 = table['hAperMag3']
+                        op4 = table['kAperMag3']
+                except:
+                    print('A problem occurred while downloading 2MASS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                    print(traceback.format_exc())
 
             database = 'UKIDSSDR11PLUS'
             images = get_UKIDSS_image(ra, dec, 'Y', img_size, database)
@@ -519,14 +544,18 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             date_pattern = '%Y-%m-%d'
 
             if overlays:
-                table = Vsa.query_region(coords, radius, database='VHSDR6', programme_id='VHS')
-                if table:
-                    ora = table['ra']
-                    odec = table['dec']
-                    op1 = table['yAperMag3']
-                    op2 = table['jAperMag3']
-                    op3 = table['hAperMag3']
-                    op4 = table['ksAperMag3']
+                try:
+                    table = Vsa.query_region(coords, radius, database='VHSDR6', programme_id='VHS')
+                    if table:
+                        ora = table['ra']
+                        odec = table['dec']
+                        op1 = table['yAperMag3']
+                        op2 = table['jAperMag3']
+                        op3 = table['hAperMag3']
+                        op4 = table['ksAperMag3']
+                except:
+                    print('A problem occurred while downloading 2MASS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                    print(traceback.format_exc())
 
             images = get_VHS_image(ra, dec, 'Y', img_size)
             if images:
@@ -565,57 +594,65 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             date_obs_key = 'MJD-OBS'
             date_pattern = 'MJD'
 
-            query_url = 'http://ps1images.stsci.edu/cgi-bin/ps1filenames.py'
-            payload = {
-                'ra': ra,
-                'dec': dec,
-                'filters': 'grizy',
-                'sep': 'comma'
-            }
-            r = requests.get(query_url, params=payload, timeout=timeout)
+            try:
+                query_url = 'http://ps1images.stsci.edu/cgi-bin/ps1filenames.py'
+                payload = {
+                    'ra': ra,
+                    'dec': dec,
+                    'filters': 'grizy',
+                    'sep': 'comma'
+                }
+                text = requests.get(query_url, params=payload, timeout=timeout).text
+            except:
+                text = None
+                print('A problem occurred while downloading Pan-STARRS image urls for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                print(traceback.format_exc())
 
-            if r.text.count('\n') > 0:
-                table = ascii.read(r.text)
+            if text and text.count('\n') > 0:
+                table = ascii.read(text)
 
                 images = {}
 
                 for row in table:
-                    download_url = 'http://ps1images.stsci.edu/cgi-bin/fitscut.cgi?format=fits&red={filename}&ra={ra}&dec={dec}&size={size}'
-                    download_url = download_url.format(filename=row['filename'], ra=ra, dec=dec, size=img_size*4)
-                    images[row['filter']] = fits.open(download_file(download_url, cache=cache, show_progress=show_progress, timeout=timeout))
+                    try:
+                        download_url = 'http://ps1images.stsci.edu/cgi-bin/fitscut.cgi?format=fits&red={filename}&ra={ra}&dec={dec}&size={size}'
+                        download_url = download_url.format(filename=row['filename'], ra=ra, dec=dec, size=img_size*4)
+                        images[row['filter']] = fits.open(download_file(download_url, cache=cache, show_progress=show_progress, timeout=timeout))
+                    except:
+                        print('A problem occurred while downloading Pan-STARRS images for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                        print(traceback.format_exc())
 
                 if images:
                     if overlays:
-                        columns = ['raMean', 'decMean', 'gMeanPSFMag',  'rMeanPSFMag', 'iMeanPSFMag', 'zMeanPSFMag', 'yMeanPSFMag']
-                        table = Catalogs.query_region(coords, radius=radius, catalog='Panstarrs', data_release='dr2', table='mean',
-                                                      nStackDetections=[("gte", 2)], columns=columns)
-                        if table:
-                            ora = table['raMean']
-                            odec = table['decMean']
-                            op1 = table['gMeanPSFMag']
-                            op2 = table['rMeanPSFMag']
-                            op3 = table['iMeanPSFMag']
-                            op4 = table['zMeanPSFMag']
-                            op5 = table['yMeanPSFMag']
+                        try:
+                            columns = ['raMean', 'decMean', 'gMeanPSFMag',  'rMeanPSFMag', 'iMeanPSFMag', 'zMeanPSFMag', 'yMeanPSFMag']
+                            table = Catalogs.query_region(coords, radius=radius, catalog='Panstarrs', data_release='dr2', table='mean',
+                                                          nStackDetections=[("gte", 2)], columns=columns)
+                            if table:
+                                ora = table['raMean']
+                                odec = table['decMean']
+                                op1 = table['gMeanPSFMag']
+                                op2 = table['rMeanPSFMag']
+                                op3 = table['iMeanPSFMag']
+                                op4 = table['zMeanPSFMag']
+                                op5 = table['yMeanPSFMag']
+                        except:
+                            print('A problem occurred while downloading 2MASS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                            print(traceback.format_exc())
 
-                    _, b, x, y = create_image(images['g'][0], img_idx, 'PS1 g', get_year_obs(
-                        images['g'][0], date_obs_key, date_pattern), ora, odec, op1)
+                    _, b, x, y = create_image(images['g'][0], img_idx, 'PS1 g', get_year_obs(images['g'][0], date_obs_key, date_pattern), ora, odec, op1)
                     img_idx += 1
 
-                    _, _, _, _ = create_image(images['r'][0], img_idx, 'PS1 r', get_year_obs(
-                        images['r'][0], date_obs_key, date_pattern), ora, odec, op2)
+                    _, _, _, _ = create_image(images['r'][0], img_idx, 'PS1 r', get_year_obs(images['r'][0], date_obs_key, date_pattern), ora, odec, op2)
                     img_idx += 1
 
-                    _, g, x, y = create_image(images['i'][0], img_idx, 'PS1 i', get_year_obs(
-                        images['i'][0], date_obs_key, date_pattern), ora, odec, op3)
+                    _, g, x, y = create_image(images['i'][0], img_idx, 'PS1 i', get_year_obs(images['i'][0], date_obs_key, date_pattern), ora, odec, op3)
                     img_idx += 1
 
-                    _, _, _, _ = create_image(images['z'][0], img_idx, 'PS1 z', get_year_obs(
-                        images['z'][0], date_obs_key, date_pattern), ora, odec, op4)
+                    _, _, _, _ = create_image(images['z'][0], img_idx, 'PS1 z', get_year_obs(images['z'][0], date_obs_key, date_pattern), ora, odec, op4)
                     img_idx += 1
 
-                    _, r, x, y = create_image(images['y'][0], img_idx, 'PS1 y', get_year_obs(
-                        images['y'][0], date_obs_key, date_pattern), ora, odec, op5)
+                    _, r, x, y = create_image(images['y'][0], img_idx, 'PS1 y', get_year_obs(images['y'][0], date_obs_key, date_pattern), ora, odec, op5)
                     img_idx += 1
 
                     create_color_image(r, g, b, img_idx, 'y-i-g', x, y)
@@ -642,59 +679,36 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
             image, instrument = get_DECam_image(ra, dec, 'g', img_size)
             if image:
-                try:
-                    j, b, x, y = create_image(image[0], img_idx, instrument + ' g',
-                                              get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op5)
-                    i += j
-                except:
-                    print(traceback.format_exc())
+                j, b, x, y = create_image(image[0], img_idx, instrument + ' g', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op5)
+                i += j
             img_idx += 1
 
             image, instrument = get_DECam_image(ra, dec, 'r', img_size)
             if image:
-                try:
-                    j, g, x, y = create_image(image[0], img_idx, instrument + ' r',
-                                              get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op5)
-                    i += j
-                except:
-                    print(traceback.format_exc())
+                j, g, x, y = create_image(image[0], img_idx, instrument + ' r', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op5)
+                i += j
             img_idx += 1
 
             image, instrument = get_DECam_image(ra, dec, 'i', img_size)
             if image:
-                try:
-                    j, _, _, _ = create_image(image[0], img_idx, instrument + ' i',
-                                              get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op5)
-                    i += j
-                except:
-                    print(traceback.format_exc())
+                j, _, _, _ = create_image(image[0], img_idx, instrument + ' i', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op5)
+                i += j
             img_idx += 1
 
             image, instrument = get_DECam_image(ra, dec, 'z', img_size)
             if image:
-                try:
-                    j, r, x, y = create_image(image[0], img_idx, instrument + ' z',
-                                              get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op5)
-                    i += j
-                except:
-                    print(traceback.format_exc())
+                j, r, x, y = create_image(image[0], img_idx, instrument + ' z', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op5)
+                i += j
             img_idx += 1
 
             image, instrument = get_DECam_image(ra, dec, 'Y', img_size)
             if image:
-                try:
-                    j, _, _, _ = create_image(image[0], img_idx, instrument + ' Y',
-                                              get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op5)
-                    i += j
-                except:
-                    print(traceback.format_exc())
+                j, _, _, _ = create_image(image[0], img_idx, instrument + ' Y', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op5)
+                i += j
             img_idx += 1
 
-            try:
-                create_color_image(r, g, b, img_idx, 'z-r-g', x, y)
-                img_idx += 1
-            except:
-                print(traceback.format_exc())
+            create_color_image(r, g, b, img_idx, 'z-r-g', x, y)
+            img_idx += 1
 
             if i == 0:
                 img_idx -= cols
@@ -714,26 +728,31 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 images = []
 
                 for i in range(1, 100, 1):
-                    imageW1 = get_neowise_image(ra, dec, epoch=i, band=1, size=img_size)
-                    imageW2 = get_neowise_image(ra, dec, epoch=i, band=2, size=img_size)
-                    if not imageW1 and not imageW2:
-                        break
-                    hdu = imageW1[0]
-                    header = hdu.header
-                    meanmjd = (header['MJDMIN']+header['MJDMAX'])/2
-                    year = get_year_from_mjd(meanmjd)
-                    if (year == prev_year):
-                        dataW1 += hdu.data
-                        dataW2 += imageW2[0].data
-                        j += 1
-                    else:
-                        hduW1 = fits.PrimaryHDU(data=dataW1/j, header=header)
-                        hduW2 = fits.PrimaryHDU(data=dataW2/j, header=header)
-                        images.append((hduW1, hduW2, prev_year))
-                        dataW1 = hdu.data
-                        dataW2 = imageW2[0].data
-                        j = 1
-                    prev_year = year
+                    try:
+                        imageW1 = get_neowise_image(ra, dec, epoch=i, band=1, size=img_size)
+                        imageW2 = get_neowise_image(ra, dec, epoch=i, band=2, size=img_size)
+                        if not imageW1 and not imageW2:
+                            break
+                        hdu = imageW1[0]
+                        header = hdu.header
+                        meanmjd = (header['MJDMIN']+header['MJDMAX'])/2
+                        year = get_year_from_mjd(meanmjd)
+                        if (year == prev_year):
+                            dataW1 += hdu.data
+                            dataW2 += imageW2[0].data
+                            j += 1
+                        else:
+                            hduW1 = fits.PrimaryHDU(data=dataW1/j, header=header)
+                            hduW2 = fits.PrimaryHDU(data=dataW2/j, header=header)
+                            images.append((hduW1, hduW2, prev_year))
+                            dataW1 = hdu.data
+                            dataW2 = imageW2[0].data
+                            j = 1
+                        prev_year = year
+                    except:
+                        print('A problem occurred while creating WISE time series for object ra={ra}, dec={dec}, epoch={epoch}'.format(
+                            ra=ra, dec=dec, epoch=i))
+                        print(traceback.format_exc())
 
                 hduW1 = fits.PrimaryHDU(data=dataW1/j, header=header)
                 hduW2 = fits.PrimaryHDU(data=dataW2/j, header=header)
@@ -747,7 +766,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         img_idx += 1
 
         # Save and open the PDF file
-        filename = create_obj_name(ra, dec) + '.pdf'
+        filename = create_obj_name(ra, dec) + '.png'
         plt.savefig(filename, dpi=600, bbox_inches='tight')
         plt.close()
 
@@ -778,6 +797,6 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         for i in range(len(ra)):
             try:
                 finder_charts(ra[i], dec[i])
-            except Exception as e:
-                print('A problem occurred while creating finder charts for object ra={ra}, dec={dec} ===>'.format(ra=ra[i], dec=dec[i]), e)
+            except:
+                print('A problem occurred while creating finder charts for object ra={ra}, dec={dec}'.format(ra=ra[i], dec=dec[i]))
                 print(traceback.format_exc())
