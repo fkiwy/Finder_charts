@@ -39,11 +39,12 @@ Parameter description:
 - ```decam``` : whether to create DECam image series (type: bool, default: True)
 - ```neowise``` : whether to create WISE time series (type: bool, default: True)
 - ```neowise_contrast``` : WISE time series contrast (type: int, default: 3)
-- ```directory``` : output directory for the resulting PDF files (type: str, default: system temp directory)
+- ```directory``` : directory where the finder charts should be saved (type: str, default: system temp directory)
 - ```cache``` : whether to cache the downloaded files (type: bool, default: True)
 - ```show_progress``` : whether to show the file download progress (type: bool, default: True)
 - ```timeout``` : timeout for remote requests in seconds (type: int, default: 300 sec)
-- ```open_pdf``` : whether to open the saved result PDF file(s) (type: bool, default: True)
+- ```open_pdf``` : whether to open the saved finder charts (type: bool, default: True)
+- ```file_format``` : output file format: pdf, png, eps, etc. (type: str, default: 'pdf')
 
 Example output:
 ![Example output](example_output.png)
