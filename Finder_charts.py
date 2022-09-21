@@ -31,9 +31,9 @@ from reproject import reproject_interp
 from pyvo.dal import sia
 
 
-def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='red',
-                         dss=True, twomass=True, spitzer=True, wise=True, ukidss=True, vhs=True, ps1=True, decam=True, neowise=True,
-                         neowise_contrast=3, directory=tempfile.gettempdir(), cache=True, show_progress=True, timeout=300, open_pdf=True):
+def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='red', dss=True, twomass=True, spitzer=True, wise=True,
+                         ukidss=True, vhs=True, ps1=True, decam=True, neowise=True, neowise_contrast=3, directory=tempfile.gettempdir(),
+                         cache=True, show_progress=True, timeout=300 ,open_pdf=True, file_format='pdf'):
 
     def finder_charts(ra, dec):
 
@@ -766,8 +766,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         img_idx += 1
 
         # Save and open the PDF file
-        filename = create_obj_name(ra, dec) + '.png'
-        plt.savefig(filename, dpi=600, bbox_inches='tight')
+        filename = create_obj_name(ra, dec) + '.' + file_format
+        plt.savefig(filename, dpi=600, bbox_inches='tight', format=file_format)
         plt.close()
 
         if open_pdf:
@@ -792,7 +792,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             raise Exception('Dec must be either a sequence or a numpy array')
 
         if (len(ra) != len(dec)):
-            raise Exception('Ra and dec must have the same size: len(ra)={ra}, len(dec)={dec}'.format(ra=len(ra), dec=len(dec)))
+            raise Exception('Ra and Dec must have the same length: len(ra)={ra}, len(dec)={dec}'.format(ra=len(ra), dec=len(dec)))
 
         for i in range(len(ra)):
             try:
