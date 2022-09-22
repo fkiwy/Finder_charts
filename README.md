@@ -2,9 +2,9 @@
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7097859.svg)](https://doi.org/10.5281/zenodo.7097859)
 
-Finder_chatrs is a Python module to create finder charts from image data of following sky surveys:
+ ```Finder_charts``` is a Python module to create multi-bands finder charts from image data of following sky surveys:
 - DSS (DSS1 B, DSS1 R, DSS2 B, DSS2 R, DSS2 IR),
-- 2MASS (J,H,K),
+- 2MASS (J, H, K),
 - Spitzer (IRAC1, IRAC2, IRAC3, IRAC4, MIPS24),
 - WISE (W1, W2, W3, W4),
 - UKIDSS (Y, J, H, K),
@@ -22,6 +22,8 @@ This is a minimal usage example:
 from Finder_charts import create_finder_charts
 create_finder_charts(16.9701886, 0.6992208)
 ```
+
+Dependencies: NumPy, Matplotlib, Astropy, Pillow (PIL Fork)
 
 Parameter description:
 - ```ra``` : right ascension in decimal degrees (type: float)
