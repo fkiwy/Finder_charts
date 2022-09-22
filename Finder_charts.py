@@ -33,7 +33,80 @@ from pyvo.dal import sia
 
 def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='red', dss=True, twomass=True, spitzer=True, wise=True,
                          ukidss=True, vhs=True, ps1=True, decam=True, neowise=True, neowise_contrast=3, directory=tempfile.gettempdir(),
-                         cache=True, show_progress=True, timeout=300 ,open_pdf=True, file_format='pdf'):
+                         cache=True, show_progress=True, timeout=300, open_pdf=None, open_file=True, file_format='pdf'):
+    """
+    Creates multi-bands finder charts from image data of following sky surveys:
+    - DSS (DSS1 B, DSS1 R, DSS2 B, DSS2 R, DSS2 IR),
+    - 2MASS (J, H, K),
+    - Spitzer (IRAC1, IRAC2, IRAC3, IRAC4, MIPS24),
+    - WISE (W1, W2, W3, W4),
+    - UKIDSS (Y, J, H, K),
+    - UHS (J),
+    - VHS (Y, J, H, K),
+    - Pan-STARRS (g, r, i, z, y),
+    - DECam (g, r, i, z, Y).
+
+    This function also creates a WISE time series of epochs 2010, (2013), and 2014-2021.
+    Required arguments are ``ra`` and ``dec`` in decimal degrees, which can be specified either as a scalar, Python sequence (list, tuple, ...), or Numpy array.
+    The resulting finder charts are saved to the specified directory (default is system temp dir) and will be opened automatically if desired (see parameters).
+
+    Parameters
+    ----------
+    ra : float
+        Right ascension in decimal degrees.
+    dec : float
+        Declination in decimal degrees.
+    img_size : int, optional
+        Image size in arcseconds. The default is 100.
+    overlays : bool, optional
+        Whether to plot catalog overlays. The default is False.
+    overlay_color : str, optional
+        Catalog overlay color. The default is 'red'.
+    dss : bool, optional
+        Whether to create DSS image series. The default is True.
+    twomass : bool, optional
+        Whether to create 2MASS image series. The default is True.
+    spitzer : bool, optional
+        Whether to create Spitzer image series. The default is True.
+    wise : bool, optional
+        Whether to create WISE image series. The default is True.
+    ukidss : bool, optional
+        Whether to create UKIDSS image series. The default is True.
+    vhs : bool, optional
+        Whether to create VHS image series. The default is True.
+    ps1 : bool, optional
+        Whether to create Pan-STARRS image series. The default is True.
+    decam : bool, optional
+        Whether to create DECam image series. The default is True.
+    neowise : bool, optional
+        Whether to create WISE time series. The default is True.
+    neowise_contrast : int, optional
+        WISE time series contrast. The default is 3.
+    directory : str, optional
+        Directory where the finder charts should be saved. The default is tempfile.gettempdir().
+    cache : bool, optional
+        Whether to cache the downloaded files. The default is True.
+    show_progress : bool, optional
+        Whether to show the file download progress. The default is True.
+    timeout : int, optional
+        Timeout for remote requests in seconds. The default is 300.
+    open_pdf : bool, optional
+        Deprecated, replaced by ``open_file``.
+    open_file : bool, optional
+        Whether the saved finder charts should be opened automatically. The default is True.
+    file_format : str, optional
+        Output file format: pdf, png, eps, etc.. The default is 'pdf'.
+
+    Raises
+    ------
+    Exception
+        - If ``ra`` or ``dec`` is neither a sequence nor a numpy array.
+        - If ``ra`` and ``dec`` are either a sequence or a numpy array but don't have the same length.
+    """
+
+    # Parameter deprecation warnings
+    if open_pdf is not None:
+        warnings.warn('Parameter ``open_pdf`` is deprecated. Please use ``open_file`` instead.', DeprecationWarning, stacklevel=2)
 
     def finder_charts(ra, dec):
 
@@ -83,29 +156,16 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 if r is None or g is None or b is None:
                     return
 
-                xmin = min([r.shape[0], g.shape[0], b.shape[0]])
-                ymin = min([r.shape[1], g.shape[1], b.shape[1]])
-
-                xmax = max([r.shape[0], g.shape[0], b.shape[0]])
-                ymax = max([r.shape[1], g.shape[1], b.shape[1]])
-
-                if xmax - xmin > 2 or ymax - ymin > 2:
-                    print('Array shapes too different to create a color image for', band, '-> R shape:',
-                          r.shape, 'G shape:', g.shape, 'B shape:', b.shape)
-                    return
-
-                r = r[0:xmin, 0:ymin]
-                g = g[0:xmin, 0:ymin]
-                b = b[0:xmin, 0:ymin]
-
                 if neowise:
                     # _, vmin, vmax = sigma_clip(g, sigma_lower=1, sigma_upper=5, maxiters=None, return_bounds=True)
                     vmin, vmax = get_min_max(g, lo=neowise_contrast, hi=100-neowise_contrast)
                     rgb = Image.fromarray(make_lupton_rgb(r, g, b, stretch=vmax-vmin, Q=0, minimum=vmin))
                 else:
-                    r = Image.fromarray(create_lupton_rgb(r)).convert("L")
-                    g = Image.fromarray(create_lupton_rgb(g)).convert("L")
-                    b = Image.fromarray(create_lupton_rgb(b)).convert("L")
+                    xmax = max([r.shape[0], g.shape[0], b.shape[0]])
+                    ymax = max([r.shape[1], g.shape[1], b.shape[1]])
+                    r = Image.fromarray(create_lupton_rgb(r)).convert("L").resize((xmax, ymax), Image.ANTIALIAS)
+                    g = Image.fromarray(create_lupton_rgb(g)).convert("L").resize((xmax, ymax), Image.ANTIALIAS)
+                    b = Image.fromarray(create_lupton_rgb(b)).convert("L").resize((xmax, ymax), Image.ANTIALIAS)
                     rgb = Image.merge("RGB", (r, g, b))
 
                 ax = fig.add_subplot(rows, cols, img_idx)
@@ -245,7 +305,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             dec_str = str(dec) if dec < 0 else '+' + str(dec)
             return ra_str + dec_str
 
-        def open_file(filename):
+        def start_file(filename):
             if sys.platform == "win32":
                 os.startfile(filename)
             else:
@@ -506,7 +566,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
             images = get_UKIDSS_image(ra, dec, 'J', img_size, database)
             if images:
-                j, _, _, _ = create_image(images[0][1], img_idx, 'UKIDSS J', get_year_obs(images[0][0], date_obs_key, date_pattern), ora, odec, op2)
+                j, b, _, _ = create_image(images[0][1], img_idx, 'UKIDSS J', get_year_obs(images[0][0], date_obs_key, date_pattern), ora, odec, op2)
                 i += j
             img_idx += 1
 
@@ -522,7 +582,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 i += j
             img_idx += 1
 
-            create_color_image(r, g, g, img_idx, 'K-H', x, y)
+            create_color_image(r, g, b, img_idx, 'K-H-J', x, y)
             img_idx += 1
 
             # UHS
@@ -770,8 +830,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         plt.savefig(filename, dpi=600, bbox_inches='tight', format=file_format)
         plt.close()
 
-        if open_pdf:
-            open_file(filename)
+        if (open_pdf if open_pdf is not None else open_file):
+            start_file(filename)
 
     # --------------------------------------
     # Code for create_finder_charts function

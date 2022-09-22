@@ -15,13 +15,17 @@
 
 It also creates a WISE time series of epochs 2010, (2013), and 2014-2021.
 
-The code only takes two mandatory arguments, RA and Dec in decimal degrees, which can be specified either as a scalar, Python sequence (list, tuple, ...), or Numpy array.
+All images are reprojected so that north is up and east to the left.
+
+The main function only takes two mandatory arguments, RA and Dec in decimal degrees, which can be specified either as a scalar, Python sequence (list, tuple, ...), or Numpy array.
 
 This is a minimal usage example:
 ```
 from Finder_charts import create_finder_charts
 create_finder_charts(16.9701886, 0.6992208)
 ```
+
+The resulting finder charts are saved to the specified directory (```directory```) and automatically opened on request (```open_file=True```).
 
 Dependencies: NumPy, Matplotlib, Astropy, Pillow (PIL Fork)
 
@@ -45,7 +49,8 @@ Parameter description:
 - ```cache``` : whether to cache the downloaded files (type: bool, default: True)
 - ```show_progress``` : whether to show the file download progress (type: bool, default: True)
 - ```timeout``` : timeout for remote requests in seconds (type: int, default: 300 sec)
-- ```open_pdf``` : whether to open the saved finder charts (type: bool, default: True)
+- ```open_pdf``` : deprecated, replaced by ```open_file```
+- ```open_file``` : whether the saved finder charts should be opened automatically (type: bool, default: True)
 - ```file_format``` : output file format: pdf, png, eps, etc. (type: str, default: 'pdf')
 
 Example output:
