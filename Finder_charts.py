@@ -100,7 +100,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
     Raises
     ------
     Exception
-        - If ``ra`` or ``dec`` is neither a sequence nor a numpy array.
+        - If ``ra`` and ``dec`` are neither a scalar nor a sequence or numpy array.
         - If ``ra`` and ``dec`` are either a sequence or a numpy array but don't have the same length.
     """
 
@@ -163,10 +163,10 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 else:
                     xmax = max([r.shape[0], g.shape[0], b.shape[0]])
                     ymax = max([r.shape[1], g.shape[1], b.shape[1]])
-                    r = Image.fromarray(create_lupton_rgb(r)).convert("L").resize((xmax, ymax), Image.ANTIALIAS)
-                    g = Image.fromarray(create_lupton_rgb(g)).convert("L").resize((xmax, ymax), Image.ANTIALIAS)
-                    b = Image.fromarray(create_lupton_rgb(b)).convert("L").resize((xmax, ymax), Image.ANTIALIAS)
-                    rgb = Image.merge("RGB", (r, g, b))
+                    r = Image.fromarray(create_lupton_rgb(r)).convert('L').resize((xmax, ymax), Image.ANTIALIAS)
+                    g = Image.fromarray(create_lupton_rgb(g)).convert('L').resize((xmax, ymax), Image.ANTIALIAS)
+                    b = Image.fromarray(create_lupton_rgb(b)).convert('L').resize((xmax, ymax), Image.ANTIALIAS)
+                    rgb = Image.merge('RGB', (r, g, b))
 
                 ax = fig.add_subplot(rows, cols, img_idx)
                 ax.plot(x, y, 'ro', fillstyle='none', markersize=7, markeredgewidth=0.2)
@@ -237,10 +237,10 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         def get_DECam_image(ra, dec, band, size):
             try:
                 fov = (size * u.arcsec).to(u.deg)
-                svc = sia.SIAService('https://datalab.noirlab.edu/sia')
+                svc = sia.SIAService('https://datalab.noirlab.edu/sia/coadd_all')
                 result = svc.search((ra, dec), (fov/np.cos(dec*np.pi/180), fov), verbosity=2).to_table()
-                select = np.char.startswith(result['obs_bandpass'].astype(str), band) & \
-                    (result['proctype'] == 'Stack') & (result['prodtype'] == 'image')  # & (result['instrument_name'] == 'DECam')
+                select = np.char.startswith(result['obs_bandpass'].astype(str), band) & (result['proctype'] == 'Stack') & \
+                    (result['prodtype'] == 'image') & (result['project_code'] == 'DES DR1')
                 table = result[select]
                 if len(table) > 0:
                     row = table[np.argmax(table['exptime'].data.data.astype('float'))]  # get image with longest exposure time
@@ -306,10 +306,10 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             return ra_str + dec_str
 
         def start_file(filename):
-            if sys.platform == "win32":
+            if sys.platform == 'win32':
                 os.startfile(filename)
             else:
-                opener = "open" if sys.platform == "darwin" else "evince"
+                opener = 'open' if sys.platform == 'darwin' else 'evince'
                 subprocess.call([opener, filename])
 
         # -------------------------------
@@ -326,7 +326,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         # DSS
         if dss:
-            i = 0
+            i = x = y = 0
             r = g = b = None
             date_obs_key = 'DATE-OBS'
             date_pattern = '%Y-%m-%d'
@@ -369,7 +369,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         # 2MASS
         if twomass:
-            i = 0
+            i = x = y = 0
             r = g = b = None
             ora = odec = op1 = op2 = op3 = op4 = op5 = None
             date_obs_key = 'ORDATE'
@@ -440,7 +440,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         # Spitzer
         if spitzer:
-            i = 0
+            i = x = y = 0
             r = g = b = None
             date_obs_key = 'MJDMEAN'
             date_pattern = 'MJD'
@@ -483,7 +483,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         # WISE
         if wise:
-            i = 0
+            i = x = y = 0
             r = g = b = None
             ora = odec = op1 = op2 = op3 = op4 = op5 = None
             date_obs_key = 'MIDOBS'
@@ -537,7 +537,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         # UKIDSS
         if ukidss:
-            i = 0
+            i = x = y = 0
             r = g = b = None
             ora = odec = op1 = op2 = op3 = op4 = op5 = None
             date_obs_key = 'DATE-OBS'
@@ -566,19 +566,19 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
             images = get_UKIDSS_image(ra, dec, 'J', img_size, database)
             if images:
-                j, b, _, _ = create_image(images[0][1], img_idx, 'UKIDSS J', get_year_obs(images[0][0], date_obs_key, date_pattern), ora, odec, op2)
+                j, b, x, y = create_image(images[0][1], img_idx, 'UKIDSS J', get_year_obs(images[0][0], date_obs_key, date_pattern), ora, odec, op2)
                 i += j
             img_idx += 1
 
             images = get_UKIDSS_image(ra, dec, 'H', img_size, database)
             if images:
-                j, g, x, y = create_image(images[0][1], img_idx, 'UKIDSS H', get_year_obs(images[0][0], date_obs_key, date_pattern), ora, odec, op3)
+                j, g, _, _ = create_image(images[0][1], img_idx, 'UKIDSS H', get_year_obs(images[0][0], date_obs_key, date_pattern), ora, odec, op3)
                 i += j
             img_idx += 1
 
             images = get_UKIDSS_image(ra, dec, 'K', img_size, database)
             if images:
-                j, r, x, y = create_image(images[0][1], img_idx, 'UKIDSS K', get_year_obs(images[0][0], date_obs_key, date_pattern), ora, odec, op4)
+                j, r, _, _ = create_image(images[0][1], img_idx, 'UKIDSS K', get_year_obs(images[0][0], date_obs_key, date_pattern), ora, odec, op4)
                 i += j
             img_idx += 1
 
@@ -597,7 +597,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         # VHS
         if vhs:
-            i = 0
+            i = x = y = 0
             r = g = b = None
             ora = odec = op1 = op2 = op3 = op4 = op5 = None
             date_obs_key = 'DATE-OBS'
@@ -649,6 +649,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         # PS1
         if ps1:
+            x = y = 0
             r = g = b = None
             ora = odec = op1 = op2 = op3 = op4 = op5 = None
             date_obs_key = 'MJD-OBS'
@@ -687,7 +688,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         try:
                             columns = ['raMean', 'decMean', 'gMeanPSFMag',  'rMeanPSFMag', 'iMeanPSFMag', 'zMeanPSFMag', 'yMeanPSFMag']
                             table = Catalogs.query_region(coords, radius=radius, catalog='Panstarrs', data_release='dr2', table='mean',
-                                                          nStackDetections=[("gte", 2)], columns=columns)
+                                                          nStackDetections=[('gte', 2)], columns=columns)
                             if table:
                                 ora = table['raMean']
                                 odec = table['decMean']
@@ -720,11 +721,11 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         # DECam
         if decam:
-            i = 0
+            i = x = y = 0
             r = g = b = None
             ora = odec = op1 = op2 = op3 = op4 = op5 = None
-            date_obs_key = 'DATE-OBS'
-            date_pattern = '%Y-%m-%d'
+            date_obs_key = 'MJD-OBS'
+            date_pattern = 'MJD'
 
             if overlays:
                 table = search_noirlab(ra, dec, radius)
@@ -739,35 +740,35 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
             image, instrument = get_DECam_image(ra, dec, 'g', img_size)
             if image:
-                j, b, x, y = create_image(image[0], img_idx, instrument + ' g', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op5)
+                j, b, x, y = create_image(image[0], img_idx, instrument + ' g', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op1)
                 i += j
             img_idx += 1
 
             image, instrument = get_DECam_image(ra, dec, 'r', img_size)
             if image:
-                j, g, x, y = create_image(image[0], img_idx, instrument + ' r', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op5)
+                j, _, _, _ = create_image(image[0], img_idx, instrument + ' r', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op2)
                 i += j
             img_idx += 1
 
             image, instrument = get_DECam_image(ra, dec, 'i', img_size)
             if image:
-                j, _, _, _ = create_image(image[0], img_idx, instrument + ' i', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op5)
+                j, g, x, y = create_image(image[0], img_idx, instrument + ' i', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op3)
                 i += j
             img_idx += 1
 
             image, instrument = get_DECam_image(ra, dec, 'z', img_size)
             if image:
-                j, r, x, y = create_image(image[0], img_idx, instrument + ' z', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op5)
+                j, _, _, _ = create_image(image[0], img_idx, instrument + ' z', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op4)
                 i += j
             img_idx += 1
 
             image, instrument = get_DECam_image(ra, dec, 'Y', img_size)
             if image:
-                j, _, _, _ = create_image(image[0], img_idx, instrument + ' Y', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op5)
+                j, r, x, y = create_image(image[0], img_idx, instrument + ' Y', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op5)
                 i += j
             img_idx += 1
 
-            create_color_image(r, g, b, img_idx, 'z-r-g', x, y)
+            create_color_image(r, g, b, img_idx, 'Y-i-g', x, y)
             img_idx += 1
 
             if i == 0:

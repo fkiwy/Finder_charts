@@ -27,9 +27,10 @@ create_finder_charts(16.9701886, 0.6992208)
 
 The resulting finder charts are saved to the directory given by parameter ```directory``` and automatically opened if ```open_file``` is set to True.
 
-Module dependencies: The Python Standard Library, NumPy, Matplotlib, Astropy and Pillow (PIL Fork)
+### Module dependencies:
+The Python Standard Library, NumPy, Matplotlib, Astropy and Pillow (PIL Fork)
 
-Parameter description:
+### Parameter description:
 - ```ra``` : right ascension in decimal degrees (type: float)
 - ```dec``` : declination in decimal degrees (type: float)
 - ```img_size``` : image size in arcseconds (type: int, default: 100)
@@ -53,8 +54,8 @@ Parameter description:
 - ```open_file``` : whether the saved finder charts should be opened automatically (type: bool, default: True)
 - ```file_format``` : output file format: pdf, png, eps, etc. (type: str, default: 'pdf')
 
-Example output:
+### Example output:
 ![Example output](example_output.png)
 
-With catalog overlays:
+#### With catalog overlays:
 ![Example output](example_output_with_overlays.png)
