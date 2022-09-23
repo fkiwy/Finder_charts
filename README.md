@@ -15,9 +15,9 @@
 
 It also creates a WISE time series of epochs 2010, (2013), and 2014-2021.
 
-All images are reprojected so that north is up and east to the left.
+All images are reprojected so that north is up and east is to the left.
 
-The main function only takes two mandatory arguments, RA and Dec in decimal degrees, which can be specified either as a scalar, Python sequence (list, tuple, ...), or Numpy array.
+The ```create_finder_charts``` function only takes two mandatory arguments, RA and Dec in decimal degrees, which can be specified either as a scalar, Python sequence (list, tuple, ...), or Numpy array.
 
 This is a minimal usage example:
 ```
@@ -25,14 +25,14 @@ from Finder_charts import create_finder_charts
 create_finder_charts(16.9701886, 0.6992208)
 ```
 
-The resulting finder charts are saved to the specified directory (```directory```) and automatically opened on request (```open_file=True```).
+The resulting finder charts are saved to the directory given by parameter ```directory``` and automatically opened if ```open_file``` is set to True.
 
-Dependencies: NumPy, Matplotlib, Astropy, Pillow (PIL Fork)
+Module dependencies: The Python Standard Library, NumPy, Matplotlib, Astropy and Pillow (PIL Fork)
 
 Parameter description:
 - ```ra``` : right ascension in decimal degrees (type: float)
 - ```dec``` : declination in decimal degrees (type: float)
-- ```img_size``` : image size in arcseconds (type: int, default: 100 arcsec)
+- ```img_size``` : image size in arcseconds (type: int, default: 100)
 - ```overlays``` : whether to plot catalog overlays (type: bool, default: False)
 - ```overlay_color``` : catalog overlay color (type: str, default: 'red')
 - ```dss``` : whether to create DSS image series (type: bool, default: True)
@@ -45,10 +45,10 @@ Parameter description:
 - ```decam``` : whether to create DECam image series (type: bool, default: True)
 - ```neowise``` : whether to create WISE time series (type: bool, default: True)
 - ```neowise_contrast``` : WISE time series contrast (type: int, default: 3)
-- ```directory``` : directory where the finder charts should be saved (type: str, default: system temp directory)
+- ```directory``` : directory where the finder charts should be saved (type: str, default: tempfile.gettempdir())
 - ```cache``` : whether to cache the downloaded files (type: bool, default: True)
 - ```show_progress``` : whether to show the file download progress (type: bool, default: True)
-- ```timeout``` : timeout for remote requests in seconds (type: int, default: 300 sec)
+- ```timeout``` : timeout for remote requests in seconds (type: int, default: 300)
 - ```open_pdf``` : deprecated, replaced by ```open_file```
 - ```open_file``` : whether the saved finder charts should be opened automatically (type: bool, default: True)
 - ```file_format``` : output file format: pdf, png, eps, etc. (type: str, default: 'pdf')

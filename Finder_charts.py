@@ -48,7 +48,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
     This function also creates a WISE time series of epochs 2010, (2013), and 2014-2021.
     Required arguments are ``ra`` and ``dec`` in decimal degrees, which can be specified either as a scalar, Python sequence (list, tuple, ...), or Numpy array.
-    The resulting finder charts are saved to the specified directory (default is system temp dir) and will be opened automatically if desired (see parameters).
+    The resulting finder charts are saved to the directory given by parameter ``directory`` and automatically opened if ``open_file`` is set to True.
 
     Parameters
     ----------
