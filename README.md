@@ -1,6 +1,6 @@
 # Finder_charts
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7097859.svg)](https://doi.org/10.5281/zenodo.7097859)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7111737.svg)](https://doi.org/10.5281/zenodo.7111737)
 
  ```Finder_charts``` is a Python module to create multi-bands finder charts from image data of following sky surveys:
 - DSS (DSS1 B, DSS1 R, DSS2 B, DSS2 R, DSS2 IR),
