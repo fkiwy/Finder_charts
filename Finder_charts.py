@@ -1,3 +1,4 @@
+import io
 import os
 import sys
 import math
@@ -160,6 +161,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     # _, vmin, vmax = sigma_clip(g, sigma_lower=1, sigma_upper=5, maxiters=None, return_bounds=True)
                     vmin, vmax = get_min_max(g, lo=neowise_contrast, hi=100-neowise_contrast)
                     rgb = Image.fromarray(make_lupton_rgb(r, g, b, stretch=vmax-vmin, Q=0, minimum=vmin))
+                    rgb = ImageOps.invert(rgb)
                 else:
                     xmax = max([r.shape[0], g.shape[0], b.shape[0]])
                     ymax = max([r.shape[1], g.shape[1], b.shape[1]])
@@ -178,13 +180,19 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 if year_obs:
                     ax.text(0.04, 0.05, year_obs, color='black', fontsize=1.8, transform=ax.transAxes,
                             bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
-                    rgb = ImageOps.invert(rgb)
 
                 ax.imshow(rgb, origin='lower')
                 ax.axis('off')
+
+                img_buf = io.BytesIO()
+                extent = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
+                fig.savefig(img_buf, bbox_inches=extent, dpi=dpi)
+
+                return img_buf
             except:
                 print('A problem occurred while creating a color image for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                 print(traceback.format_exc())
+                return None
 
         def create_lupton_rgb(data):
             vmin, vmax = get_min_max(data)
@@ -318,16 +326,19 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         fig = plt.figure()
         fig.set_figheight(5)
         fig.set_figwidth(5)
-        plt.subplots_adjust(wspace=0, hspace=0.05, right=0.575)
+        plt.subplots_adjust(wspace=0, hspace=0.05, right=0.5)
 
         img_idx = 1
         coords = SkyCoord(ra*u.deg, dec*u.deg)
         radius = (img_size*math.sqrt(2)/2)*u.arcsec
 
+        cross_survey = []
+
         # DSS
         if dss:
             i = x = y = 0
             r = g = b = None
+            year_r = year_g = year_b = np.nan
             date_obs_key = 'DATE-OBS'
             date_pattern = '%Y-%m-%d'
 
@@ -345,23 +356,29 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
             image = get_IRSA_image(ra, dec, 'dss', 'dss_bands=poss2ukstu_blue', img_size)
             if image:
-                j, b, x, y = create_image(image[0], img_idx, 'DSS2 B', get_year_obs(image[0], date_obs_key, date_pattern))
+                year_b = get_year_obs(image[0], date_obs_key, date_pattern)
+                j, b, x, y = create_image(image[0], img_idx, 'DSS2 B', year_b)
                 i += j
             img_idx += 1
 
             image = get_IRSA_image(ra, dec, 'dss', 'dss_bands=poss2ukstu_red', img_size)
             if image:
-                j, g, x, y = create_image(image[0], img_idx, 'DSS2 R', get_year_obs(image[0], date_obs_key, date_pattern))
+                year_g = get_year_obs(image[0], date_obs_key, date_pattern)
+                j, g, x, y = create_image(image[0], img_idx, 'DSS2 R', year_g)
                 i += j
             img_idx += 1
 
             image = get_IRSA_image(ra, dec, 'dss', 'dss_bands=poss2ukstu_ir', img_size)
             if image:
-                j, r, x, y = create_image(image[0], img_idx, 'DSS2 IR', get_year_obs(image[0], date_obs_key, date_pattern))
+                year_r = get_year_obs(image[0], date_obs_key, date_pattern)
+                j, r, x, y = create_image(image[0], img_idx, 'DSS2 IR', year_r)
                 i += j
             img_idx += 1
 
-            create_color_image(r, g, b, img_idx, 'IR-R-B', x, y)
+            if year_r is not np.nan or year_g is not np.nan or year_b is not np.nan:
+                mean_obs_year = round(np.nanmean([year_r, year_g,  year_b]), 1)
+                rgb = create_color_image(r, g, b, img_idx, 'DSS2 IR-R-B', x, y, year_obs=mean_obs_year)
+                cross_survey.append((mean_obs_year, rgb))
             img_idx += 1
 
             if i == 0:
@@ -371,6 +388,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         if twomass:
             i = x = y = 0
             r = g = b = None
+            year_r = year_g = year_b = np.nan
             ora = odec = op1 = op2 = op3 = op4 = op5 = None
             date_obs_key = 'ORDATE'
             date_pattern = '%y%m%d'
@@ -392,23 +410,29 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
             image = get_IRSA_image(ra, dec, '2mass', 'twomass_bands=j', img_size)
             if image:
-                j, b, x, y = create_image(image[0], img_idx, '2MASS J', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op1)
+                year_b = get_year_obs(image[0], date_obs_key, date_pattern)
+                j, b, x, y = create_image(image[0], img_idx, '2MASS J', year_b, ora, odec, op1)
                 i += j
             img_idx += 1
 
             image = get_IRSA_image(ra, dec, '2mass', 'twomass_bands=h', img_size)
             if image:
-                j, g, x, y = create_image(image[0], img_idx, '2MASS H', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op2)
+                year_g = get_year_obs(image[0], date_obs_key, date_pattern)
+                j, g, x, y = create_image(image[0], img_idx, '2MASS H', year_g, ora, odec, op2)
                 i += j
             img_idx += 1
 
             image = get_IRSA_image(ra, dec, '2mass', 'twomass_bands=k', img_size)
             if image:
-                j, r, x, y = create_image(image[0], img_idx, '2MASS K', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op3)
+                year_r = get_year_obs(image[0], date_obs_key, date_pattern)
+                j, r, x, y = create_image(image[0], img_idx, '2MASS K', year_r, ora, odec, op3)
                 i += j
             img_idx += 1
 
-            create_color_image(r, g, b, img_idx, 'K-H-J', x, y)
+            if year_r is not np.nan or year_g is not np.nan or year_b is not np.nan:
+                mean_obs_year = round(np.nanmean([year_r, year_g,  year_b]), 1)
+                rgb = create_color_image(r, g, b, img_idx, '2MASS K-H-J', x, y, year_obs=mean_obs_year)
+                cross_survey.append((mean_obs_year, rgb))
             img_idx += 1
 
             # if i == 0:
@@ -419,10 +443,10 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         # Info text
         fontsize = 2.4
         ax = fig.add_subplot(rows, cols, img_idx)
-        ax.text(0.1, 0.7, r'$\alpha$ = ' + str(round(coords.ra.value, 6)), fontsize=fontsize, transform=ax.transAxes)
-        ax.text(0.1, 0.6, r'$\delta$ = ' + str(round(coords.dec.value, 6)), fontsize=fontsize, transform=ax.transAxes)
-        ax.text(0.1, 0.5, '$l$ = ' + str(round(coords.galactic.l.value, 6)), fontsize=fontsize, transform=ax.transAxes)
-        ax.text(0.1, 0.4, '$b$ = ' + str(round(coords.galactic.b.value, 6)), fontsize=fontsize, transform=ax.transAxes)
+        ax.text(0.05, 0.65, r'$\alpha$ = ' + str(round(coords.ra.value, 6)), fontsize=fontsize, transform=ax.transAxes)
+        ax.text(0.05, 0.55, r'$\delta$ = ' + str(round(coords.dec.value, 6)), fontsize=fontsize, transform=ax.transAxes)
+        ax.text(0.05, 0.45, '$l$ = ' + str(round(coords.galactic.l.value, 6)), fontsize=fontsize, transform=ax.transAxes)
+        ax.text(0.05, 0.35, '$b$ = ' + str(round(coords.galactic.b.value, 6)), fontsize=fontsize, transform=ax.transAxes)
         ax.axis('off')
         img_idx += 1
 
@@ -431,10 +455,10 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         hms = hmsdms[0:11]
         dms = hmsdms[12:24] if dec < 0 else hmsdms[13:24]
         ax = fig.add_subplot(rows, cols, img_idx)
-        ax.text(-0.1, 0.7, '(' + hms + ')', fontsize=fontsize, transform=ax.transAxes)
-        ax.text(-0.1, 0.6, '(' + dms + ')', fontsize=fontsize, transform=ax.transAxes)
-        ax.text(-0.1, 0.5, 'Size = ' + str(int(img_size)) + ' arcsec', fontsize=fontsize, transform=ax.transAxes)
-        ax.text(-0.1, 0.4, 'North up, East left', fontsize=fontsize, transform=ax.transAxes)
+        ax.text(0, 0.65, '(' + hms + ')', fontsize=fontsize, transform=ax.transAxes)
+        ax.text(0, 0.55, '(' + dms + ')', fontsize=fontsize, transform=ax.transAxes)
+        ax.text(0, 0.45, 'Size = ' + str(int(img_size)) + ' arcsec', fontsize=fontsize, transform=ax.transAxes)
+        ax.text(0, 0.35, 'North up, East left', fontsize=fontsize, transform=ax.transAxes)
         ax.axis('off')
         img_idx += 1
 
@@ -442,24 +466,28 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         if spitzer:
             i = x = y = 0
             r = g = b = None
+            year_r = year_g = year_b = np.nan
             date_obs_key = 'MJDMEAN'
             date_pattern = 'MJD'
 
             image = get_IRSA_image(ra, dec, 'seip', 'seip_bands=spitzer.seip_science:IRAC1', img_size)
             if image:
-                j, b, x, y = create_image(image[0], img_idx, 'IRAC1', get_year_obs(image[0], date_obs_key, date_pattern))
+                year_b = get_year_obs(image[0], date_obs_key, date_pattern)
+                j, b, x, y = create_image(image[0], img_idx, 'IRAC1', year_b)
                 i += j
             img_idx += 1
 
             image = get_IRSA_image(ra, dec, 'seip', 'seip_bands=spitzer.seip_science:IRAC2', img_size)
             if image:
-                j, g, x, y = create_image(image[0], img_idx, 'IRAC2', get_year_obs(image[0], date_obs_key, date_pattern))
+                year_g = get_year_obs(image[0], date_obs_key, date_pattern)
+                j, g, x, y = create_image(image[0], img_idx, 'IRAC2', year_g)
                 i += j
             img_idx += 1
 
             image = get_IRSA_image(ra, dec, 'seip', 'seip_bands=spitzer.seip_science:IRAC3', img_size)
             if image:
-                j, r, x, y = create_image(image[0], img_idx, 'IRAC3', get_year_obs(image[0], date_obs_key, date_pattern))
+                year_r = get_year_obs(image[0], date_obs_key, date_pattern)
+                j, r, x, y = create_image(image[0], img_idx, 'IRAC3', year_r)
                 i += j
             img_idx += 1
 
@@ -475,7 +503,10 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 i += j
             img_idx += 1
 
-            create_color_image(r, g, b, img_idx, 'CH3-CH2-CH1', x, y)
+            if year_r is not np.nan or year_g is not np.nan or year_b is not np.nan:
+                mean_obs_year = round(np.nanmean([year_r, year_g,  year_b]), 1)
+                rgb = create_color_image(r, g, b, img_idx, 'IRAC3-2-1', x, y, year_obs=mean_obs_year)
+                cross_survey.append((mean_obs_year, rgb))
             img_idx += 1
 
             if i == 0:
@@ -485,6 +516,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         if wise:
             i = x = y = 0
             r = g = b = None
+            year_r = year_g = year_b = np.nan
             ora = odec = op1 = op2 = op3 = op4 = op5 = None
             date_obs_key = 'MIDOBS'
             date_pattern = '%Y-%m-%d'
@@ -507,19 +539,22 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
             image = get_IRSA_image(ra, dec, 'wise', 'wise_bands=1', img_size)
             if image:
-                j, b, x, y = create_image(image[0], img_idx, 'W1', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op1)
+                year_b = get_year_obs(image[0], date_obs_key, date_pattern)
+                j, b, x, y = create_image(image[0], img_idx, 'W1', year_b, ora, odec, op1)
                 i += j
             img_idx += 1
 
             image = get_IRSA_image(ra, dec, 'wise', 'wise_bands=2', img_size)
             if image:
-                j, g, x, y = create_image(image[0], img_idx, 'W2', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op2)
+                year_g = get_year_obs(image[0], date_obs_key, date_pattern)
+                j, g, x, y = create_image(image[0], img_idx, 'W2', year_g, ora, odec, op2)
                 i += j
             img_idx += 1
 
             image = get_IRSA_image(ra, dec, 'wise', 'wise_bands=3', img_size)
             if image:
-                j, r, x, y = create_image(image[0], img_idx, 'W3', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op3)
+                year_r = get_year_obs(image[0], date_obs_key, date_pattern)
+                j, r, x, y = create_image(image[0], img_idx, 'W3', year_r, ora, odec, op3)
                 i += j
             img_idx += 1
 
@@ -529,7 +564,10 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 i += j
             img_idx += 1
 
-            create_color_image(r, g, b, img_idx, 'W3-W2-W1', x, y)
+            if year_r is not np.nan or year_g is not np.nan or year_b is not np.nan:
+                mean_obs_year = round(np.nanmean([year_r, year_g,  year_b]), 1)
+                rgb = create_color_image(r, g, b, img_idx, 'W3-W2-W1', x, y, year_obs=mean_obs_year)
+                cross_survey.append((mean_obs_year, rgb))
             img_idx += 2
 
             if i == 0:
@@ -539,6 +577,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         if ukidss:
             i = x = y = 0
             r = g = b = None
+            year_r = year_g = year_b = np.nan
             ora = odec = op1 = op2 = op3 = op4 = op5 = None
             date_obs_key = 'DATE-OBS'
             date_pattern = '%Y-%m-%d'
@@ -566,23 +605,29 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
             images = get_UKIDSS_image(ra, dec, 'J', img_size, database)
             if images:
-                j, b, x, y = create_image(images[0][1], img_idx, 'UKIDSS J', get_year_obs(images[0][0], date_obs_key, date_pattern), ora, odec, op2)
+                year_b = get_year_obs(images[0][0], date_obs_key, date_pattern)
+                j, b, x, y = create_image(images[0][1], img_idx, 'UKIDSS J', year_b, ora, odec, op2)
                 i += j
             img_idx += 1
 
             images = get_UKIDSS_image(ra, dec, 'H', img_size, database)
             if images:
-                j, g, _, _ = create_image(images[0][1], img_idx, 'UKIDSS H', get_year_obs(images[0][0], date_obs_key, date_pattern), ora, odec, op3)
+                year_g = get_year_obs(images[0][0], date_obs_key, date_pattern)
+                j, g, _, _ = create_image(images[0][1], img_idx, 'UKIDSS H', year_g, ora, odec, op3)
                 i += j
             img_idx += 1
 
             images = get_UKIDSS_image(ra, dec, 'K', img_size, database)
             if images:
-                j, r, _, _ = create_image(images[0][1], img_idx, 'UKIDSS K', get_year_obs(images[0][0], date_obs_key, date_pattern), ora, odec, op4)
+                year_r = get_year_obs(images[0][0], date_obs_key, date_pattern)
+                j, r, _, _ = create_image(images[0][1], img_idx, 'UKIDSS K', year_r, ora, odec, op4)
                 i += j
             img_idx += 1
 
-            create_color_image(r, g, b, img_idx, 'K-H-J', x, y)
+            if year_r is not np.nan or year_g is not np.nan or year_b is not np.nan:
+                mean_obs_year = round(np.nanmean([year_r, year_g,  year_b]), 1)
+                rgb = create_color_image(r, g, b, img_idx, 'UKIDSS K-H-J', x, y, year_obs=mean_obs_year)
+                cross_survey.append((mean_obs_year, rgb))
             img_idx += 1
 
             # UHS
@@ -599,6 +644,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         if vhs:
             i = x = y = 0
             r = g = b = None
+            year_r = year_g = year_b = np.nan
             ora = odec = op1 = op2 = op3 = op4 = op5 = None
             date_obs_key = 'DATE-OBS'
             date_pattern = '%Y-%m-%d'
@@ -625,23 +671,29 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
             images = get_VHS_image(ra, dec, 'J', img_size)
             if images:
-                j, b, x, y = create_image(images[0][1], img_idx, 'VHS J', get_year_obs(images[0][1], date_obs_key, date_pattern), ora, odec, op2)
+                year_b = get_year_obs(images[0][1], date_obs_key, date_pattern)
+                j, b, x, y = create_image(images[0][1], img_idx, 'VHS J', year_b, ora, odec, op2)
                 i += j
             img_idx += 1
 
             images = get_VHS_image(ra, dec, 'H', img_size)
             if images:
-                j, g, x, y = create_image(images[0][1], img_idx, 'VHS H', get_year_obs(images[0][1], date_obs_key, date_pattern), ora, odec, op3)
+                year_g = get_year_obs(images[0][1], date_obs_key, date_pattern)
+                j, g, x, y = create_image(images[0][1], img_idx, 'VHS H', year_g, ora, odec, op3)
                 i += j
             img_idx += 1
 
             images = get_VHS_image(ra, dec, 'Ks', img_size)
             if images:
-                j, r, x, y = create_image(images[0][1], img_idx, 'VHS K', get_year_obs(images[0][1], date_obs_key, date_pattern), ora, odec, op4)
+                year_r = get_year_obs(images[0][1], date_obs_key, date_pattern)
+                j, r, x, y = create_image(images[0][1], img_idx, 'VHS K', year_r, ora, odec, op4)
                 i += j
             img_idx += 1
 
-            create_color_image(r, g, b, img_idx, 'K-H-J', x, y)
+            if year_r is not np.nan or year_g is not np.nan or year_b is not np.nan:
+                mean_obs_year = round(np.nanmean([year_r, year_g,  year_b]), 1)
+                rgb = create_color_image(r, g, b, img_idx, 'VHS K-H-J', x, y, year_obs=mean_obs_year)
+                cross_survey.append((mean_obs_year, rgb))
             img_idx += 2
 
             if i == 0:
@@ -651,6 +703,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         if ps1:
             x = y = 0
             r = g = b = None
+            year_r = year_g = year_b = np.nan
             ora = odec = op1 = op2 = op3 = op4 = op5 = None
             date_obs_key = 'MJD-OBS'
             date_pattern = 'MJD'
@@ -701,28 +754,35 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                             print('A problem occurred while downloading 2MASS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                             print(traceback.format_exc())
 
-                    _, b, x, y = create_image(images['g'][0], img_idx, 'PS1 g', get_year_obs(images['g'][0], date_obs_key, date_pattern), ora, odec, op1)
+                    year_b = get_year_obs(images['g'][0], date_obs_key, date_pattern)
+                    _, b, x, y = create_image(images['g'][0], img_idx, 'PS1 g', year_b, ora, odec, op1)
                     img_idx += 1
 
                     _, _, _, _ = create_image(images['r'][0], img_idx, 'PS1 r', get_year_obs(images['r'][0], date_obs_key, date_pattern), ora, odec, op2)
                     img_idx += 1
 
-                    _, g, x, y = create_image(images['i'][0], img_idx, 'PS1 i', get_year_obs(images['i'][0], date_obs_key, date_pattern), ora, odec, op3)
+                    year_g = get_year_obs(images['i'][0], date_obs_key, date_pattern)
+                    _, g, x, y = create_image(images['i'][0], img_idx, 'PS1 i', year_g, ora, odec, op3)
                     img_idx += 1
 
                     _, _, _, _ = create_image(images['z'][0], img_idx, 'PS1 z', get_year_obs(images['z'][0], date_obs_key, date_pattern), ora, odec, op4)
                     img_idx += 1
 
-                    _, r, x, y = create_image(images['y'][0], img_idx, 'PS1 y', get_year_obs(images['y'][0], date_obs_key, date_pattern), ora, odec, op5)
+                    year_r = get_year_obs(images['y'][0], date_obs_key, date_pattern)
+                    _, r, x, y = create_image(images['y'][0], img_idx, 'PS1 y', year_r, ora, odec, op5)
                     img_idx += 1
 
-                    create_color_image(r, g, b, img_idx, 'y-i-g', x, y)
+                    if year_r is not np.nan or year_g is not np.nan or year_b is not np.nan:
+                        mean_obs_year = round(np.nanmean([year_r, year_g,  year_b]), 1)
+                        rgb = create_color_image(r, g, b, img_idx, 'PS1 y-i-g', x, y, year_obs=mean_obs_year)
+                        cross_survey.append((mean_obs_year, rgb))
                     img_idx += 1
 
         # DECam
         if decam:
             i = x = y = 0
             r = g = b = None
+            year_r = year_g = year_b = np.nan
             ora = odec = op1 = op2 = op3 = op4 = op5 = None
             date_obs_key = 'MJD-OBS'
             date_pattern = 'MJD'
@@ -740,7 +800,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
             image, instrument = get_DECam_image(ra, dec, 'g', img_size)
             if image:
-                j, b, x, y = create_image(image[0], img_idx, instrument + ' g', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op1)
+                year_b = get_year_obs(image[0], date_obs_key, date_pattern)
+                j, b, x, y = create_image(image[0], img_idx, instrument + ' g', year_b, ora, odec, op1)
                 i += j
             img_idx += 1
 
@@ -752,7 +813,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
             image, instrument = get_DECam_image(ra, dec, 'i', img_size)
             if image:
-                j, g, x, y = create_image(image[0], img_idx, instrument + ' i', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op3)
+                year_g = get_year_obs(image[0], date_obs_key, date_pattern)
+                j, g, x, y = create_image(image[0], img_idx, instrument + ' i', year_g, ora, odec, op3)
                 i += j
             img_idx += 1
 
@@ -764,17 +826,34 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
             image, instrument = get_DECam_image(ra, dec, 'Y', img_size)
             if image:
-                j, r, x, y = create_image(image[0], img_idx, instrument + ' Y', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op5)
+                year_r = get_year_obs(image[0], date_obs_key, date_pattern)
+                j, r, x, y = create_image(image[0], img_idx, instrument + ' Y', year_r, ora, odec, op5)
                 i += j
             img_idx += 1
 
-            create_color_image(r, g, b, img_idx, 'Y-i-g', x, y)
+            if year_r is not np.nan or year_g is not np.nan or year_b is not np.nan:
+                mean_obs_year = round(np.nanmean([year_r, year_g,  year_b]), 1)
+                rgb = create_color_image(r, g, b, img_idx, instrument + ' Y-i-g', x, y, year_obs=mean_obs_year)
+                cross_survey.append((mean_obs_year, rgb))
             img_idx += 1
 
             if i == 0:
                 img_idx -= cols
 
-        # NEOWISE
+        # Cross-survey time series
+        cross_survey.sort(key=lambda x: x[0])  # sort by mean observation year
+        i = 0
+        for survey in cross_survey:
+            rgb = survey[1]
+            if rgb:
+                ax = fig.add_subplot(rows, cols, img_idx)
+                ax.imshow(Image.open(rgb))
+                ax.axis('off')
+                img_idx += 1
+                i += 1
+        img_idx += math.ceil(i / cols) * cols - i
+
+        # WISE time series
         if neowise:
             imageW1 = get_neowise_image(ra, dec, epoch=0, band=1, size=img_size)
             imageW2 = get_neowise_image(ra, dec, epoch=0, band=2, size=img_size)
@@ -811,8 +890,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                             j = 1
                         prev_year = year
                     except:
-                        print('A problem occurred while creating WISE time series for object ra={ra}, dec={dec}, epoch={epoch}'.format(
-                            ra=ra, dec=dec, epoch=i))
+                        print('A problem occurred while creating WISE time series for object ra={ra}, dec={dec}, epoch={epoch}'
+                              .format(ra=ra, dec=dec, epoch=i))
                         print(traceback.format_exc())
 
                 hduW1 = fits.PrimaryHDU(data=dataW1/j, header=header)
@@ -828,7 +907,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         # Save and open the PDF file
         filename = create_obj_name(ra, dec) + '.' + file_format
-        plt.savefig(filename, dpi=600, bbox_inches='tight', format=file_format)
+        plt.savefig(filename, dpi=dpi, bbox_inches='tight', format=file_format)
         plt.close()
 
         if (open_pdf if open_pdf is not None else open_file):
@@ -840,8 +919,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
     warnings.simplefilter('ignore', category=AstropyWarning)
     os.chdir(directory)
 
-    rows = 10
+    rows = 12
     cols = 6
+    dpi = 600
 
     if np.isscalar(ra) and np.isscalar(dec):
         finder_charts(ra, dec)
