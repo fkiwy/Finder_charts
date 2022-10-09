@@ -81,6 +81,10 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         Whether to create WISE time series. The default is True.
     neowise_contrast : int, optional
         WISE time series contrast. The default is 3.
+    chrono_order : bool, optional
+        Whether to plot image series in chronological order. The default is True.
+    object_info : bool, optional
+        Whether to plot object information like coordinates, etc. The default is True.
     directory : str, optional
         Directory where the finder charts should be saved. The default is tempfile.gettempdir().
     cache : bool, optional
@@ -92,7 +96,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
     open_pdf : bool, optional
         Deprecated, replaced by ``open_file``.
     open_file : bool, optional
-        Whether the saved finder charts should be opened automatically. The default is True.
+        Whether to open the saved finder charts automatically (type: bool, default: True)
     file_format : str, optional
         Output file format: pdf, png, eps, etc.. The default is 'pdf'.
 
