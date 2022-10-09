@@ -46,12 +46,14 @@ The Python Standard Library, NumPy, Matplotlib, Astropy and Pillow (PIL Fork)
 - ```decam``` : whether to create DECam image series (type: bool, default: True)
 - ```neowise``` : whether to create WISE time series (type: bool, default: True)
 - ```neowise_contrast``` : WISE time series contrast (type: int, default: 3)
+- ```chrono_order``` : whether to plot image series in chronological order (type: bool, default: True)
+- ```object_info``` : whether to plot object information like coordinates, etc. (type: bool, default: True)
 - ```directory``` : directory where the finder charts should be saved (type: str, default: tempfile.gettempdir())
 - ```cache``` : whether to cache the downloaded files (type: bool, default: True)
 - ```show_progress``` : whether to show the file download progress (type: bool, default: True)
 - ```timeout``` : timeout for remote requests in seconds (type: int, default: 300)
 - ```open_pdf``` : deprecated, replaced by ```open_file```
-- ```open_file``` : whether the saved finder charts should be opened automatically (type: bool, default: True)
+- ```open_file``` : whether to open the saved finder charts automatically (type: bool, default: True)
 - ```file_format``` : output file format: pdf, png, eps, etc. (type: str, default: 'pdf')
 
 ### Example output:

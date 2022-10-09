@@ -1,4 +1,3 @@
-import io
 import os
 import sys
 import math
@@ -14,7 +13,6 @@ from PIL import Image, ImageOps
 import matplotlib.pyplot as plt
 from matplotlib.patches import BoxStyle, Rectangle
 from astropy.io import ascii
-# from astropy.stats import sigma_clip
 from astropy.visualization import make_lupton_rgb
 from astropy.nddata import Cutout2D
 from astropy.io import fits
@@ -33,8 +31,8 @@ from pyvo.dal import sia
 
 
 def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='red', dss=True, twomass=True, spitzer=True, wise=True,
-                         ukidss=True, vhs=True, ps1=True, decam=True, neowise=True, neowise_contrast=3, directory=tempfile.gettempdir(),
-                         cache=True, show_progress=True, timeout=300, open_pdf=None, open_file=True, file_format='pdf'):
+                         ukidss=True, vhs=True, ps1=True, decam=True, neowise=True, neowise_contrast=3, chrono_order=True, object_info=True,
+                         directory=tempfile.gettempdir(), cache=True, show_progress=True, timeout=300, open_pdf=None, open_file=True, file_format='pdf'):
     """
     Creates multi-bands finder charts from image data of following sky surveys:
     - DSS (DSS1 B, DSS1 R, DSS2 B, DSS2 R, DSS2 IR),
@@ -105,94 +103,103 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         - If ``ra`` and ``dec`` are either a sequence or a numpy array but don't have the same length.
     """
 
+    class ImageBucket:
+        def __init__(self, data, x, y, band, year_obs, wcs, overlay_ra=None, overlay_dec=None, overlay_phot=None):
+            self.data = data
+            self.x = x
+            self.y = y
+            self.band = band
+            self.year_obs = year_obs
+            self.wcs = wcs
+            self.overlay_ra = overlay_ra
+            self.overlay_dec = overlay_dec
+            self.overlay_phot = overlay_phot
+
     # Parameter deprecation warnings
     if open_pdf is not None:
         warnings.warn('Parameter ``open_pdf`` is deprecated. Please use ``open_file`` instead.', DeprecationWarning, stacklevel=2)
 
     def finder_charts(ra, dec):
 
-        def create_image(hdu, img_idx, band, year_obs, ora=None, odec=None, ophot=None):
+        def process_image_data(hdu):
             try:
                 data = hdu.data
-
                 nanValues = np.count_nonzero(np.isnan(data))
                 totValues = np.count_nonzero(data)
 
                 if nanValues < totValues * 0.5:
                     wcs, shape = find_optimal_celestial_wcs([hdu], frame='icrs')
                     data, _ = reproject_interp(hdu, wcs, shape_out=shape)
-
                     position = SkyCoord(ra*u.deg, dec*u.deg)
                     cutout = Cutout2D(data, position, img_size*u.arcsec, wcs=wcs, mode='partial')
                     data = cutout.data
                     wcs = cutout.wcs
-
-                    ax = fig.add_subplot(rows, cols, img_idx, projection=wcs)
                     x, y = wcs.world_to_pixel(position)
-                    ax.plot(x, y, 'ro', fillstyle='none', markersize=7, markeredgewidth=0.2)
-                    ax.plot(x, y, 'ro', fillstyle='none', markersize=0.2, markeredgewidth=0.2)
-                    ax.text(0.04, 0.91, band, color='black', fontsize=1.8, transform=ax.transAxes,
-                            bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
-                    ax.text(0.04, 0.05, year_obs, color='black', fontsize=1.8, transform=ax.transAxes,
-                            bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
-                    ax.add_patch(Rectangle((0, 0), 1, 1, fill=False, lw=0.2, ec='black', transform=ax.transAxes))
-
-                    if ora is not None and odec is not None and ophot is not None:
-                        ax.scatter(ora, odec, transform=ax.get_transform('icrs'), s=0/ophot + 1.0,
-                                   edgecolor=overlay_color, facecolor='none', linewidths=0.2)
-
-                    vmin, vmax = get_min_max(data)
-                    ax.imshow(data, vmin=vmin, vmax=vmax, cmap='gray_r')
-                    ax.axis('off')
-                    return 1, data, x, y
+                    return data, x, y, wcs
                 else:
-                    return 0, None, 0, 0
+                    return None, 0, 0, None
             except:
-                print('A problem occurred while creating an image for object ra={ra}, dec={dec}, band={band}'.format(ra=ra, dec=dec, band=band))
+                print('A problem occurred while creating an image for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                 print(traceback.format_exc())
-                return 0, None, 0, 0
+                return None, 0, 0, None
 
-        def create_color_image(r, g, b, img_idx, band, x, y, neowise=False, year_obs=None):
+        def create_color_image(r, g, b, neowise=False):
             try:
                 if r is None or g is None or b is None:
                     return
 
                 if neowise:
-                    # _, vmin, vmax = sigma_clip(g, sigma_lower=1, sigma_upper=5, maxiters=None, return_bounds=True)
                     vmin, vmax = get_min_max(g, lo=neowise_contrast, hi=100-neowise_contrast)
-                    rgb = Image.fromarray(make_lupton_rgb(r, g, b, stretch=vmax-vmin, Q=0, minimum=vmin))
-                    rgb = ImageOps.invert(rgb)
+                    image = Image.fromarray(make_lupton_rgb(r, g, b, minimum=vmin, stretch=vmax-vmin, Q=0))
+                    image = ImageOps.invert(image)
                 else:
                     xmax = max([r.shape[0], g.shape[0], b.shape[0]])
                     ymax = max([r.shape[1], g.shape[1], b.shape[1]])
                     r = Image.fromarray(create_lupton_rgb(r)).convert('L').resize((xmax, ymax), Image.ANTIALIAS)
                     g = Image.fromarray(create_lupton_rgb(g)).convert('L').resize((xmax, ymax), Image.ANTIALIAS)
                     b = Image.fromarray(create_lupton_rgb(b)).convert('L').resize((xmax, ymax), Image.ANTIALIAS)
-                    rgb = Image.merge('RGB', (r, g, b))
+                    image = Image.merge('RGB', (r, g, b))
 
-                ax = fig.add_subplot(rows, cols, img_idx)
-                ax.plot(x, y, 'ro', fillstyle='none', markersize=7, markeredgewidth=0.2)
-                ax.plot(x, y, 'ro', fillstyle='none', markersize=0.2, markeredgewidth=0.2)
-                ax.text(0.04, 0.91, band, color='black', fontsize=1.8, transform=ax.transAxes,
-                        bbox=dict(facecolor='white', alpha=0.7, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
-                ax.add_patch(Rectangle((0, 0), 1, 1, fill=False, lw=0.2, ec='black', transform=ax.transAxes))
-
-                if year_obs:
-                    ax.text(0.04, 0.05, year_obs, color='black', fontsize=1.8, transform=ax.transAxes,
-                            bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
-
-                ax.imshow(rgb, origin='lower')
-                ax.axis('off')
-
-                img_buf = io.BytesIO()
-                extent = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
-                fig.savefig(img_buf, bbox_inches=extent, dpi=dpi)
-
-                return img_buf
+                return np.array(image)
             except:
                 print('A problem occurred while creating a color image for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                 print(traceback.format_exc())
                 return None
+
+        def plot_image(image_bucket, img_idx):
+            try:
+                if image_bucket.data is None:
+                    return
+
+                data = image_bucket.data
+                x = image_bucket.x
+                y = image_bucket.y
+                band = image_bucket.band
+                year_obs = int(round(image_bucket.year_obs, 0))
+                wcs = image_bucket.wcs
+                overlay_ra = image_bucket.overlay_ra
+                overlay_dec = image_bucket.overlay_dec
+                overlay_phot = image_bucket.overlay_phot
+
+                ax = fig.add_subplot(rows, cols, img_idx, projection=wcs)
+                ax.plot(x, y, 'ro', fillstyle='none', markersize=7, markeredgewidth=0.2)
+                ax.plot(x, y, 'ro', fillstyle='none', markersize=0.2, markeredgewidth=0.2)
+                ax.text(0.04, 0.90, band, color='black', fontsize=1.8, transform=ax.transAxes,
+                        bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
+                ax.text(0.04, 0.06, year_obs, color='black', fontsize=1.8, transform=ax.transAxes,
+                        bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
+                ax.add_patch(Rectangle((0, 0), 1, 1, fill=False, lw=0.2, ec='black', transform=ax.transAxes))
+
+                if overlay_ra is not None and overlay_dec is not None and overlay_phot is not None:
+                    ax.scatter(overlay_ra, overlay_dec, transform=ax.get_transform('icrs'), s=0/overlay_phot + 1.0,
+                               edgecolor=overlay_color, facecolor='none', linewidths=0.2)
+
+                vmin, vmax = get_min_max(data)
+                ax.imshow(data, vmin=vmin, vmax=vmax, cmap='gray_r')
+                ax.axis('off')
+            except:
+                print('A problem occurred while plotting an image for object ra={ra}, dec={dec}, band={band}'.format(ra=ra, dec=dec, band=band))
+                print(traceback.format_exc())
 
         def create_lupton_rgb(data):
             vmin, vmax = get_min_max(data)
@@ -328,70 +335,80 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         fig.set_figwidth(5)
         plt.subplots_adjust(wspace=0, hspace=0.05, right=0.5)
 
-        img_idx = 1
         coords = SkyCoord(ra*u.deg, dec*u.deg)
         radius = (img_size*math.sqrt(2)/2)*u.arcsec
 
-        cross_survey = []
+        surveys = []
 
         # DSS
         if dss:
-            i = x = y = 0
+            x = y = 0
             r = g = b = None
+            mean_obs_year = 0
             year_r = year_g = year_b = np.nan
             date_obs_key = 'DATE-OBS'
             date_pattern = '%Y-%m-%d'
+            survey = []
 
             image = get_IRSA_image(ra, dec, 'dss', 'dss_bands=poss1_blue', img_size)
             if image:
-                j, _, _, _ = create_image(image[0], img_idx, 'DSS1 B', get_year_obs(image[0], date_obs_key, date_pattern))
-                i += j
-            img_idx += 1
+                data, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(data, x, y, 'DSS1 B', get_year_obs(image[0], date_obs_key, date_pattern), wcs))
+            else:
+                survey.append(None)
 
             image = get_IRSA_image(ra, dec, 'dss', 'dss_bands=poss1_red', img_size)
             if image:
-                j, _, _, _ = create_image(image[0], img_idx, 'DSS1 R', get_year_obs(image[0], date_obs_key, date_pattern))
-                i += j
-            img_idx += 1
+                data, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(data, x, y, 'DSS1 R', get_year_obs(image[0], date_obs_key, date_pattern), wcs))
+            else:
+                survey.append(None)
 
             image = get_IRSA_image(ra, dec, 'dss', 'dss_bands=poss2ukstu_blue', img_size)
             if image:
                 year_b = get_year_obs(image[0], date_obs_key, date_pattern)
-                j, b, x, y = create_image(image[0], img_idx, 'DSS2 B', year_b)
-                i += j
-            img_idx += 1
+                b, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(b, x, y, 'DSS2 B', year_b, wcs))
+            else:
+                survey.append(None)
 
             image = get_IRSA_image(ra, dec, 'dss', 'dss_bands=poss2ukstu_red', img_size)
             if image:
                 year_g = get_year_obs(image[0], date_obs_key, date_pattern)
-                j, g, x, y = create_image(image[0], img_idx, 'DSS2 R', year_g)
-                i += j
-            img_idx += 1
+                g, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(g, x, y, 'DSS2 R', year_g, wcs))
+            else:
+                survey.append(None)
 
             image = get_IRSA_image(ra, dec, 'dss', 'dss_bands=poss2ukstu_ir', img_size)
             if image:
                 year_r = get_year_obs(image[0], date_obs_key, date_pattern)
-                j, r, x, y = create_image(image[0], img_idx, 'DSS2 IR', year_r)
-                i += j
-            img_idx += 1
+                r, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(r, x, y, 'DSS2 IR', year_r, wcs))
+            else:
+                survey.append(None)
 
-            if year_r is not np.nan or year_g is not np.nan or year_b is not np.nan:
-                mean_obs_year = round(np.nanmean([year_r, year_g,  year_b]), 1)
-                rgb = create_color_image(r, g, b, img_idx, 'DSS2 IR-R-B', x, y, year_obs=mean_obs_year)
-                cross_survey.append((mean_obs_year, rgb))
-            img_idx += 1
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+                mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
+                survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'DSS2 IR-R-B', mean_obs_year, wcs))
+            else:
+                survey.insert(0, None)
 
-            if i == 0:
-                img_idx -= cols
+            survey.insert(0, mean_obs_year)
+
+            surveys.append(survey)
 
         # 2MASS
+        TWO_MASS_K = '2MASS K'
         if twomass:
-            i = x = y = 0
+            x = y = 0
             r = g = b = None
+            mean_obs_year = 0
             year_r = year_g = year_b = np.nan
-            ora = odec = op1 = op2 = op3 = op4 = op5 = None
+            overlay_ra = overlay_dec = op1 = op2 = op3 = op4 = op5 = None
             date_obs_key = 'ORDATE'
             date_pattern = '%y%m%d'
+            survey = []
 
             if overlays:
                 try:
@@ -399,8 +416,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     tables = v.query_region(coords, radius=radius, catalog='II/246/out')
                     if tables:
                         table = tables[0]
-                        ora = table['RAJ2000']
-                        odec = table['DEJ2000']
+                        overlay_ra = table['RAJ2000']
+                        overlay_dec = table['DEJ2000']
                         op1 = table['Jmag']
                         op2 = table['Hmag']
                         op3 = table['Kmag']
@@ -411,115 +428,108 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             image = get_IRSA_image(ra, dec, '2mass', 'twomass_bands=j', img_size)
             if image:
                 year_b = get_year_obs(image[0], date_obs_key, date_pattern)
-                j, b, x, y = create_image(image[0], img_idx, '2MASS J', year_b, ora, odec, op1)
-                i += j
-            img_idx += 1
+                b, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(b, x, y, '2MASS J', year_b, wcs, overlay_ra, overlay_dec, op1))
+            else:
+                survey.append(None)
 
             image = get_IRSA_image(ra, dec, '2mass', 'twomass_bands=h', img_size)
             if image:
                 year_g = get_year_obs(image[0], date_obs_key, date_pattern)
-                j, g, x, y = create_image(image[0], img_idx, '2MASS H', year_g, ora, odec, op2)
-                i += j
-            img_idx += 1
+                g, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(g, x, y, '2MASS H', year_g, wcs, overlay_ra, overlay_dec, op2))
+            else:
+                survey.append(None)
 
             image = get_IRSA_image(ra, dec, '2mass', 'twomass_bands=k', img_size)
             if image:
                 year_r = get_year_obs(image[0], date_obs_key, date_pattern)
-                j, r, x, y = create_image(image[0], img_idx, '2MASS K', year_r, ora, odec, op3)
-                i += j
-            img_idx += 1
+                r, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(r, x, y, TWO_MASS_K, year_r, wcs, overlay_ra, overlay_dec, op3))
+            else:
+                survey.append(None)
 
-            if year_r is not np.nan or year_g is not np.nan or year_b is not np.nan:
-                mean_obs_year = round(np.nanmean([year_r, year_g,  year_b]), 1)
-                rgb = create_color_image(r, g, b, img_idx, '2MASS K-H-J', x, y, year_obs=mean_obs_year)
-                cross_survey.append((mean_obs_year, rgb))
-            img_idx += 1
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+                mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
+                survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, '2MASS K-H-J', mean_obs_year, wcs))
+            else:
+                survey.insert(0, None)
 
-            # if i == 0:
-            #    img_idx -= cols
-        else:
-            img_idx += 4
+            survey.insert(0, mean_obs_year)
 
-        # Info text
-        fontsize = 2.4
-        ax = fig.add_subplot(rows, cols, img_idx)
-        ax.text(0.05, 0.65, r'$\alpha$ = ' + str(round(coords.ra.value, 6)), fontsize=fontsize, transform=ax.transAxes)
-        ax.text(0.05, 0.55, r'$\delta$ = ' + str(round(coords.dec.value, 6)), fontsize=fontsize, transform=ax.transAxes)
-        ax.text(0.05, 0.45, '$l$ = ' + str(round(coords.galactic.l.value, 6)), fontsize=fontsize, transform=ax.transAxes)
-        ax.text(0.05, 0.35, '$b$ = ' + str(round(coords.galactic.b.value, 6)), fontsize=fontsize, transform=ax.transAxes)
-        ax.axis('off')
-        img_idx += 1
+            survey.append(None)
+            survey.append(None)
 
-        # Info text cont'd
-        hmsdms = coords.to_string('hmsdms', sep=':', precision=2)
-        hms = hmsdms[0:11]
-        dms = hmsdms[12:24] if dec < 0 else hmsdms[13:24]
-        ax = fig.add_subplot(rows, cols, img_idx)
-        ax.text(0, 0.65, '(' + hms + ')', fontsize=fontsize, transform=ax.transAxes)
-        ax.text(0, 0.55, '(' + dms + ')', fontsize=fontsize, transform=ax.transAxes)
-        ax.text(0, 0.45, 'Size = ' + str(int(img_size)) + ' arcsec', fontsize=fontsize, transform=ax.transAxes)
-        ax.text(0, 0.35, 'North up, East left', fontsize=fontsize, transform=ax.transAxes)
-        ax.axis('off')
-        img_idx += 1
+            surveys.append(survey)
 
         # Spitzer
         if spitzer:
-            i = x = y = 0
+            x = y = 0
             r = g = b = None
+            mean_obs_year = 0
             year_r = year_g = year_b = np.nan
             date_obs_key = 'MJDMEAN'
             date_pattern = 'MJD'
+            survey = []
 
             image = get_IRSA_image(ra, dec, 'seip', 'seip_bands=spitzer.seip_science:IRAC1', img_size)
             if image:
                 year_b = get_year_obs(image[0], date_obs_key, date_pattern)
-                j, b, x, y = create_image(image[0], img_idx, 'IRAC1', year_b)
-                i += j
-            img_idx += 1
+                b, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(b, x, y, 'IRAC1', year_b, wcs))
+            else:
+                survey.append(None)
 
             image = get_IRSA_image(ra, dec, 'seip', 'seip_bands=spitzer.seip_science:IRAC2', img_size)
             if image:
                 year_g = get_year_obs(image[0], date_obs_key, date_pattern)
-                j, g, x, y = create_image(image[0], img_idx, 'IRAC2', year_g)
-                i += j
-            img_idx += 1
+                g, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(g, x, y, 'IRAC2', year_g, wcs))
+            else:
+                survey.append(None)
 
             image = get_IRSA_image(ra, dec, 'seip', 'seip_bands=spitzer.seip_science:IRAC3', img_size)
             if image:
                 year_r = get_year_obs(image[0], date_obs_key, date_pattern)
-                j, r, x, y = create_image(image[0], img_idx, 'IRAC3', year_r)
-                i += j
-            img_idx += 1
+                r, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(r, x, y, 'IRAC3', year_r, wcs))
+            else:
+                survey.append(None)
 
             image = get_IRSA_image(ra, dec, 'seip', 'seip_bands=spitzer.seip_science:IRAC4', img_size)
             if image:
-                j, _, _, _ = create_image(image[0], img_idx, 'IRAC4', get_year_obs(image[0], date_obs_key, date_pattern))
-                i += j
-            img_idx += 1
+                data, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(data, x, y, 'IRAC4', get_year_obs(image[0], date_obs_key, date_pattern), wcs))
+            else:
+                survey.append(None)
 
             image = get_IRSA_image(ra, dec, 'seip', 'seip_bands=spitzer.seip_science:MIPS24', img_size)
             if image:
-                j, _, _, _ = create_image(image[0], img_idx, 'MIPS24', get_year_obs(image[0], date_obs_key, date_pattern))
-                i += j
-            img_idx += 1
+                data, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(data, x, y, 'MIPS24', get_year_obs(image[0], date_obs_key, date_pattern), wcs))
+            else:
+                survey.append(None)
 
-            if year_r is not np.nan or year_g is not np.nan or year_b is not np.nan:
-                mean_obs_year = round(np.nanmean([year_r, year_g,  year_b]), 1)
-                rgb = create_color_image(r, g, b, img_idx, 'IRAC3-2-1', x, y, year_obs=mean_obs_year)
-                cross_survey.append((mean_obs_year, rgb))
-            img_idx += 1
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+                mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
+                survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'IRAC3-2-1', mean_obs_year, wcs))
+            else:
+                survey.insert(0, None)
 
-            if i == 0:
-                img_idx -= cols
+            survey.insert(0, mean_obs_year)
+
+            surveys.append(survey)
 
         # WISE
         if wise:
-            i = x = y = 0
+            x = y = 0
             r = g = b = None
+            mean_obs_year = 0
             year_r = year_g = year_b = np.nan
-            ora = odec = op1 = op2 = op3 = op4 = op5 = None
+            overlay_ra = overlay_dec = op1 = op2 = op3 = op4 = op5 = None
             date_obs_key = 'MIDOBS'
             date_pattern = '%Y-%m-%d'
+            survey = []
 
             if overlays:
                 try:
@@ -527,8 +537,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     tables = v.query_region(coords, radius=radius, catalog='II/328/allwise')
                     if tables:
                         table = tables[0]
-                        ora = table['RAJ2000']
-                        odec = table['DEJ2000']
+                        overlay_ra = table['RAJ2000']
+                        overlay_dec = table['DEJ2000']
                         op1 = table['W1mag']
                         op2 = table['W2mag']
                         op3 = table['W3mag']
@@ -540,54 +550,63 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             image = get_IRSA_image(ra, dec, 'wise', 'wise_bands=1', img_size)
             if image:
                 year_b = get_year_obs(image[0], date_obs_key, date_pattern)
-                j, b, x, y = create_image(image[0], img_idx, 'W1', year_b, ora, odec, op1)
-                i += j
-            img_idx += 1
+                b, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(b, x, y, 'W1', year_b, wcs, overlay_ra, overlay_dec, op1))
+            else:
+                survey.append(None)
 
             image = get_IRSA_image(ra, dec, 'wise', 'wise_bands=2', img_size)
             if image:
                 year_g = get_year_obs(image[0], date_obs_key, date_pattern)
-                j, g, x, y = create_image(image[0], img_idx, 'W2', year_g, ora, odec, op2)
-                i += j
-            img_idx += 1
+                g, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(g, x, y, 'W2', year_g, wcs, overlay_ra, overlay_dec, op2))
+            else:
+                survey.append(None)
 
             image = get_IRSA_image(ra, dec, 'wise', 'wise_bands=3', img_size)
             if image:
                 year_r = get_year_obs(image[0], date_obs_key, date_pattern)
-                j, r, x, y = create_image(image[0], img_idx, 'W3', year_r, ora, odec, op3)
-                i += j
-            img_idx += 1
+                r, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(r, x, y, 'W3', year_r, wcs, overlay_ra, overlay_dec, op3))
+            else:
+                survey.append(None)
 
             image = get_IRSA_image(ra, dec, 'wise', 'wise_bands=4', img_size)
             if image:
-                j, _, _, _ = create_image(image[0], img_idx, 'W4', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op4)
-                i += j
-            img_idx += 1
+                data, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(data, x, y, 'W4', get_year_obs(image[0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op4))
+            else:
+                survey.append(None)
 
-            if year_r is not np.nan or year_g is not np.nan or year_b is not np.nan:
-                mean_obs_year = round(np.nanmean([year_r, year_g,  year_b]), 1)
-                rgb = create_color_image(r, g, b, img_idx, 'W3-W2-W1', x, y, year_obs=mean_obs_year)
-                cross_survey.append((mean_obs_year, rgb))
-            img_idx += 2
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+                mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
+                survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'W3-W2-W1', mean_obs_year, wcs))
+            else:
+                survey.insert(0, None)
 
-            if i == 0:
-                img_idx -= cols
+            survey.insert(0, mean_obs_year)
+
+            survey.append(None)
+
+            surveys.append(survey)
 
         # UKIDSS
         if ukidss:
-            i = x = y = 0
+            x = y = 0
             r = g = b = None
+            mean_obs_year = 0
             year_r = year_g = year_b = np.nan
-            ora = odec = op1 = op2 = op3 = op4 = op5 = None
+            overlay_ra = overlay_dec = op1 = op2 = op3 = op4 = op5 = None
             date_obs_key = 'DATE-OBS'
             date_pattern = '%Y-%m-%d'
+            survey = []
 
             if overlays:
                 try:
                     table = Ukidss.query_region(coords, radius, database='UKIDSSDR11PLUS', programme_id='LAS')
                     if table:
-                        ora = table['ra']
-                        odec = table['dec']
+                        overlay_ra = table['ra']
+                        overlay_dec = table['dec']
                         op1 = table['yAperMag3']
                         op2 = table['jAperMag3']
                         op3 = table['hAperMag3']
@@ -599,62 +618,73 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             database = 'UKIDSSDR11PLUS'
             images = get_UKIDSS_image(ra, dec, 'Y', img_size, database)
             if images:
-                j, _, _, _ = create_image(images[0][1], img_idx, 'UKIDSS Y', get_year_obs(images[0][0], date_obs_key, date_pattern), ora, odec, op1)
-                i += j
-            img_idx += 1
+                data, x, y, wcs = process_image_data(images[0][1])
+                survey.append(ImageBucket(data, x, y, 'UKIDSS Y', get_year_obs(images[0][0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op1))
+            else:
+                survey.append(None)
 
             images = get_UKIDSS_image(ra, dec, 'J', img_size, database)
             if images:
                 year_b = get_year_obs(images[0][0], date_obs_key, date_pattern)
-                j, b, x, y = create_image(images[0][1], img_idx, 'UKIDSS J', year_b, ora, odec, op2)
-                i += j
-            img_idx += 1
+                b, x_j, y_j, wcs_j = process_image_data(images[0][1])
+                survey.append(ImageBucket(b, x_j, y_j, 'UKIDSS J', year_b, wcs_j, overlay_ra, overlay_dec, op2))
+            else:
+                survey.append(None)
 
             images = get_UKIDSS_image(ra, dec, 'H', img_size, database)
             if images:
                 year_g = get_year_obs(images[0][0], date_obs_key, date_pattern)
-                j, g, _, _ = create_image(images[0][1], img_idx, 'UKIDSS H', year_g, ora, odec, op3)
-                i += j
-            img_idx += 1
+                g, x, y, wcs = process_image_data(images[0][1])
+                survey.append(ImageBucket(g, x, y, 'UKIDSS H', year_g, wcs, overlay_ra, overlay_dec, op3))
+            else:
+                survey.append(None)
 
             images = get_UKIDSS_image(ra, dec, 'K', img_size, database)
             if images:
                 year_r = get_year_obs(images[0][0], date_obs_key, date_pattern)
-                j, r, _, _ = create_image(images[0][1], img_idx, 'UKIDSS K', year_r, ora, odec, op4)
-                i += j
-            img_idx += 1
+                r, x, y, wcs = process_image_data(images[0][1])
+                survey.append(ImageBucket(r, x, y, 'UKIDSS K', year_r, wcs, overlay_ra, overlay_dec, op4))
+            else:
+                survey.append(None)
 
-            if year_r is not np.nan or year_g is not np.nan or year_b is not np.nan:
-                mean_obs_year = round(np.nanmean([year_r, year_g,  year_b]), 1)
-                rgb = create_color_image(r, g, b, img_idx, 'UKIDSS K-H-J', x, y, year_obs=mean_obs_year)
-                cross_survey.append((mean_obs_year, rgb))
-            img_idx += 1
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+                mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
+                survey.insert(0, ImageBucket(create_color_image(r, g, b), x_j, y_j, 'UKIDSS K-H-J', mean_obs_year, wcs_j))
+            else:
+                survey.insert(0, None)
 
             # UHS
             images = get_UKIDSS_image(ra, dec, 'J', img_size, 'UHSDR1')
             if images:
-                j, _, _, _ = create_image(images[0][1], img_idx, 'UHS J', get_year_obs(images[0][0], date_obs_key, date_pattern))
-                i += j
-            img_idx += 1
+                obs_year = get_year_obs(images[0][0], date_obs_key, date_pattern)
+                data, x, y, wcs = process_image_data(images[0][1])
+                survey.append(ImageBucket(data, x, y, 'UHS J', get_year_obs(images[0][0], date_obs_key, date_pattern), wcs))
+                if mean_obs_year == 0:
+                    mean_obs_year = obs_year
+            else:
+                survey.append(None)
 
-            if i == 0:
-                img_idx -= cols
+            survey.insert(0, mean_obs_year)
+
+            surveys.append(survey)
 
         # VHS
         if vhs:
-            i = x = y = 0
+            x = y = 0
             r = g = b = None
+            mean_obs_year = 0
             year_r = year_g = year_b = np.nan
-            ora = odec = op1 = op2 = op3 = op4 = op5 = None
+            overlay_ra = overlay_dec = op1 = op2 = op3 = op4 = op5 = None
             date_obs_key = 'DATE-OBS'
             date_pattern = '%Y-%m-%d'
+            survey = []
 
             if overlays:
                 try:
                     table = Vsa.query_region(coords, radius, database='VHSDR6', programme_id='VHS')
                     if table:
-                        ora = table['ra']
-                        odec = table['dec']
+                        overlay_ra = table['ra']
+                        overlay_dec = table['dec']
                         op1 = table['yAperMag3']
                         op2 = table['jAperMag3']
                         op3 = table['hAperMag3']
@@ -665,48 +695,57 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
             images = get_VHS_image(ra, dec, 'Y', img_size)
             if images:
-                j, _, _, _ = create_image(images[0][1], img_idx, 'VHS Y', get_year_obs(images[0][1], date_obs_key, date_pattern), ora, odec, op1)
-                i += j
-            img_idx += 1
+                data, x, y, wcs = process_image_data(images[0][1])
+                survey.append(ImageBucket(data, x, y, 'VHS Y', get_year_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op1))
+            else:
+                survey.append(None)
 
             images = get_VHS_image(ra, dec, 'J', img_size)
             if images:
                 year_b = get_year_obs(images[0][1], date_obs_key, date_pattern)
-                j, b, x, y = create_image(images[0][1], img_idx, 'VHS J', year_b, ora, odec, op2)
-                i += j
-            img_idx += 1
+                b, x, y, wcs = process_image_data(images[0][1])
+                survey.append(ImageBucket(b, x, y, 'VHS J', year_b, wcs, overlay_ra, overlay_dec, op2))
+            else:
+                survey.append(None)
 
             images = get_VHS_image(ra, dec, 'H', img_size)
             if images:
                 year_g = get_year_obs(images[0][1], date_obs_key, date_pattern)
-                j, g, x, y = create_image(images[0][1], img_idx, 'VHS H', year_g, ora, odec, op3)
-                i += j
-            img_idx += 1
+                g, x, y, wcs = process_image_data(images[0][1])
+                survey.append(ImageBucket(g, x, y, 'VHS H', year_g, wcs, overlay_ra, overlay_dec, op3))
+            else:
+                survey.append(None)
 
             images = get_VHS_image(ra, dec, 'Ks', img_size)
             if images:
                 year_r = get_year_obs(images[0][1], date_obs_key, date_pattern)
-                j, r, x, y = create_image(images[0][1], img_idx, 'VHS K', year_r, ora, odec, op4)
-                i += j
-            img_idx += 1
+                r, x, y, wcs = process_image_data(images[0][1])
+                survey.append(ImageBucket(r, x, y, 'VHS K', year_r, wcs, overlay_ra, overlay_dec, op4))
+            else:
+                survey.append(None)
 
-            if year_r is not np.nan or year_g is not np.nan or year_b is not np.nan:
-                mean_obs_year = round(np.nanmean([year_r, year_g,  year_b]), 1)
-                rgb = create_color_image(r, g, b, img_idx, 'VHS K-H-J', x, y, year_obs=mean_obs_year)
-                cross_survey.append((mean_obs_year, rgb))
-            img_idx += 2
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+                mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
+                survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'VHS K-H-J', mean_obs_year, wcs))
+            else:
+                survey.insert(0, None)
 
-            if i == 0:
-                img_idx -= cols
+            survey.insert(0, mean_obs_year)
+
+            survey.append(None)
+
+            surveys.append(survey)
 
         # PS1
         if ps1:
             x = y = 0
             r = g = b = None
+            mean_obs_year = 0
             year_r = year_g = year_b = np.nan
-            ora = odec = op1 = op2 = op3 = op4 = op5 = None
+            overlay_ra = overlay_dec = op1 = op2 = op3 = op4 = op5 = None
             date_obs_key = 'MJD-OBS'
             date_pattern = 'MJD'
+            survey = []
 
             try:
                 query_url = 'http://ps1images.stsci.edu/cgi-bin/ps1filenames.py'
@@ -743,8 +782,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                             table = Catalogs.query_region(coords, radius=radius, catalog='Panstarrs', data_release='dr2', table='mean',
                                                           nStackDetections=[('gte', 2)], columns=columns)
                             if table:
-                                ora = table['raMean']
-                                odec = table['decMean']
+                                overlay_ra = table['raMean']
+                                overlay_dec = table['decMean']
                                 op1 = table['gMeanPSFMag']
                                 op2 = table['rMeanPSFMag']
                                 op3 = table['iMeanPSFMag']
@@ -755,43 +794,49 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                             print(traceback.format_exc())
 
                     year_b = get_year_obs(images['g'][0], date_obs_key, date_pattern)
-                    _, b, x, y = create_image(images['g'][0], img_idx, 'PS1 g', year_b, ora, odec, op1)
-                    img_idx += 1
+                    b, x, y, wcs = process_image_data(images['g'][0])
+                    survey.append(ImageBucket(b, x, y, 'PS1 g', year_b, wcs, overlay_ra, overlay_dec, op1))
 
-                    _, _, _, _ = create_image(images['r'][0], img_idx, 'PS1 r', get_year_obs(images['r'][0], date_obs_key, date_pattern), ora, odec, op2)
-                    img_idx += 1
+                    data, x, y, wcs = process_image_data(images['r'][0])
+                    survey.append(ImageBucket(data, x, y, 'PS1 r', get_year_obs(images['r'][0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op2))
 
                     year_g = get_year_obs(images['i'][0], date_obs_key, date_pattern)
-                    _, g, x, y = create_image(images['i'][0], img_idx, 'PS1 i', year_g, ora, odec, op3)
-                    img_idx += 1
+                    g, x, y, wcs = process_image_data(images['i'][0])
+                    survey.append(ImageBucket(g, x, y, 'PS1 i', year_g, wcs, overlay_ra, overlay_dec, op3))
 
-                    _, _, _, _ = create_image(images['z'][0], img_idx, 'PS1 z', get_year_obs(images['z'][0], date_obs_key, date_pattern), ora, odec, op4)
-                    img_idx += 1
+                    data, x, y, wcs = process_image_data(images['z'][0])
+                    survey.append(ImageBucket(data, x, y, 'PS1 z', get_year_obs(images['z'][0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op4))
 
                     year_r = get_year_obs(images['y'][0], date_obs_key, date_pattern)
-                    _, r, x, y = create_image(images['y'][0], img_idx, 'PS1 y', year_r, ora, odec, op5)
-                    img_idx += 1
+                    r, x, y, wcs = process_image_data(images['y'][0])
+                    survey.append(ImageBucket(r, x, y, 'PS1 y', year_r, wcs, overlay_ra, overlay_dec, op5))
 
-                    if year_r is not np.nan or year_g is not np.nan or year_b is not np.nan:
-                        mean_obs_year = round(np.nanmean([year_r, year_g,  year_b]), 1)
-                        rgb = create_color_image(r, g, b, img_idx, 'PS1 y-i-g', x, y, year_obs=mean_obs_year)
-                        cross_survey.append((mean_obs_year, rgb))
-                    img_idx += 1
+                    if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+                        mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
+                        survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'PS1 y-i-g', mean_obs_year, wcs))
+                    else:
+                        survey.insert(0, None)
+
+                    survey.insert(0, mean_obs_year)
+
+                    surveys.append(survey)
 
         # DECam
         if decam:
-            i = x = y = 0
+            x = y = 0
             r = g = b = None
+            mean_obs_year = 0
             year_r = year_g = year_b = np.nan
-            ora = odec = op1 = op2 = op3 = op4 = op5 = None
+            overlay_ra = overlay_dec = op1 = op2 = op3 = op4 = op5 = None
             date_obs_key = 'MJD-OBS'
             date_pattern = 'MJD'
+            survey = []
 
             if overlays:
                 table = search_noirlab(ra, dec, radius)
                 if table:
-                    ora = table['ra']
-                    odec = table['dec']
+                    overlay_ra = table['ra']
+                    overlay_dec = table['dec']
                     op1 = table['gmag']
                     op2 = table['rmag']
                     op3 = table['imag']
@@ -801,57 +846,50 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             image, instrument = get_DECam_image(ra, dec, 'g', img_size)
             if image:
                 year_b = get_year_obs(image[0], date_obs_key, date_pattern)
-                j, b, x, y = create_image(image[0], img_idx, instrument + ' g', year_b, ora, odec, op1)
-                i += j
-            img_idx += 1
+                b, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(b, x, y, instrument + ' g', year_b, wcs, overlay_ra, overlay_dec, op1))
+            else:
+                survey.append(None)
 
             image, instrument = get_DECam_image(ra, dec, 'r', img_size)
             if image:
-                j, _, _, _ = create_image(image[0], img_idx, instrument + ' r', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op2)
-                i += j
-            img_idx += 1
+                data, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(data, x, y, instrument + ' r', get_year_obs(image[0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op2))
+            else:
+                survey.append(None)
 
             image, instrument = get_DECam_image(ra, dec, 'i', img_size)
             if image:
                 year_g = get_year_obs(image[0], date_obs_key, date_pattern)
-                j, g, x, y = create_image(image[0], img_idx, instrument + ' i', year_g, ora, odec, op3)
-                i += j
-            img_idx += 1
+                g, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(g, x, y, instrument + ' i', year_g, wcs, overlay_ra, overlay_dec, op3))
+            else:
+                survey.append(None)
 
             image, instrument = get_DECam_image(ra, dec, 'z', img_size)
             if image:
-                j, _, _, _ = create_image(image[0], img_idx, instrument + ' z', get_year_obs(image[0], date_obs_key, date_pattern), ora, odec, op4)
-                i += j
-            img_idx += 1
+                data, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(data, x, y, instrument + ' z', get_year_obs(image[0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op4))
+            else:
+                survey.append(None)
 
             image, instrument = get_DECam_image(ra, dec, 'Y', img_size)
             if image:
                 year_r = get_year_obs(image[0], date_obs_key, date_pattern)
-                j, r, x, y = create_image(image[0], img_idx, instrument + ' Y', year_r, ora, odec, op5)
-                i += j
-            img_idx += 1
+                r, x, y, wcs = process_image_data(image[0])
+                survey.append(ImageBucket(r, x, y, instrument + ' Y', year_r, wcs, overlay_ra, overlay_dec, op5))
+            else:
+                survey.append(None)
 
-            if year_r is not np.nan or year_g is not np.nan or year_b is not np.nan:
-                mean_obs_year = round(np.nanmean([year_r, year_g,  year_b]), 1)
-                rgb = create_color_image(r, g, b, img_idx, instrument + ' Y-i-g', x, y, year_obs=mean_obs_year)
-                cross_survey.append((mean_obs_year, rgb))
-            img_idx += 1
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+                mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
+                survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, instrument + ' Y-i-g', mean_obs_year, wcs))
+            else:
+                survey.insert(0, None)
 
-            if i == 0:
-                img_idx -= cols
+            survey.insert(0, mean_obs_year)
 
-        # Cross-survey time series
-        cross_survey.sort(key=lambda x: x[0])  # sort by mean observation year
-        i = 0
-        for survey in cross_survey:
-            rgb = survey[1]
-            if rgb:
-                ax = fig.add_subplot(rows, cols, img_idx)
-                ax.imshow(Image.open(rgb))
-                ax.axis('off')
-                img_idx += 1
-                i += 1
-        img_idx += math.ceil(i / cols) * cols - i
+            surveys.append(survey)
 
         # WISE time series
         if neowise:
@@ -898,16 +936,65 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 hduW2 = fits.PrimaryHDU(data=dataW2/j, header=header)
                 images.append((hduW1, hduW2, prev_year))
 
+                survey = []
+
                 for image in images:
-                    _, w1, x, y = create_image(image[0], img_idx, 'W1', image[2])
-                    _, w2, x, y = create_image(image[1], img_idx, 'W2', image[2])
+                    w1, x, y, wcs = process_image_data(image[0])
+                    w2, x, y, wcs = process_image_data(image[1])
                     if w1 is not None and w2 is not None:
-                        create_color_image(w1, (w1+w2)/2, w2, img_idx, 'W1-W2', x, y, True, image[2])
-                        img_idx += 1
+                        survey.append(ImageBucket(create_color_image(w1, (w1+w2)/2, w2, neowise=True), x, y, 'W1-W2', image[2], wcs))
+
+                survey.insert(0, 9999)
+
+                surveys.append(survey)
+
+        # Plot image series
+        if chrono_order:
+            surveys.sort(key=lambda x: x[0])  # sort by mean observation year
+        cols = 6
+        rows = 12
+        img_idx = 0
+        info_idx = 0
+        for survey in surveys:
+            survey = survey[1:len(survey)]
+            if all(image_bucket == None for image_bucket in survey):
+                continue
+            for image_bucket in survey:
+                img_idx += 1
+                if image_bucket is not None:
+                    plot_image(image_bucket, img_idx)
+                    if image_bucket.band == TWO_MASS_K:
+                        info_idx = img_idx
+
+        # Determine info text index
+        if info_idx == 0:
+            info_idx = math.ceil(img_idx / cols) * cols
+        info_idx += 1
+
+        if object_info:
+            # Info text
+            fontsize = 2.4
+            ax = fig.add_subplot(rows, cols, info_idx)
+            ax.text(0.05, 0.70, r'$\alpha$ = ' + str(round(coords.ra.value, 6)), fontsize=fontsize, transform=ax.transAxes)
+            ax.text(0.05, 0.55, r'$\delta$ = ' + str(round(coords.dec.value, 6)), fontsize=fontsize, transform=ax.transAxes)
+            ax.text(0.05, 0.40, '$l$ = ' + str(round(coords.galactic.l.value, 6)), fontsize=fontsize, transform=ax.transAxes)
+            ax.text(0.05, 0.25, '$b$ = ' + str(round(coords.galactic.b.value, 6)), fontsize=fontsize, transform=ax.transAxes)
+            ax.axis('off')
+
+            # Info text cont'd
+            hmsdms = coords.to_string('hmsdms', sep=':', precision=2)
+            hms = hmsdms[0:11]
+            dms = hmsdms[12:24] if dec < 0 else hmsdms[13:24]
+            ax = fig.add_subplot(rows, cols, info_idx + 1)
+            ax.text(0, 0.70, '(' + hms + ')', fontsize=fontsize, transform=ax.transAxes)
+            ax.text(0, 0.55, '(' + dms + ')', fontsize=fontsize, transform=ax.transAxes)
+            ax.text(0, 0.40, 'Size = ' + str(int(img_size)) + ' arcsec', fontsize=fontsize, transform=ax.transAxes)
+            ax.text(0, 0.25, 'North up, East left', fontsize=fontsize, transform=ax.transAxes)
+            ax.axis('off')
 
         # Save and open the PDF file
         filename = create_obj_name(ra, dec) + '.' + file_format
-        plt.savefig(filename, dpi=dpi, bbox_inches='tight', format=file_format)
+        plt.savefig(filename, dpi=600, bbox_inches='tight', format=file_format)
         plt.close()
 
         if (open_pdf if open_pdf is not None else open_file):
@@ -918,10 +1005,6 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
     # --------------------------------------
     warnings.simplefilter('ignore', category=AstropyWarning)
     os.chdir(directory)
-
-    rows = 12
-    cols = 6
-    dpi = 600
 
     if np.isscalar(ra) and np.isscalar(dec):
         finder_charts(ra, dec)
