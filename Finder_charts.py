@@ -31,8 +31,9 @@ from pyvo.dal import sia
 
 
 def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='red', dss=True, twomass=True, spitzer=True, wise=True,
-                         ukidss=True, vhs=True, ps1=True, decam=True, neowise=True, neowise_contrast=3, chrono_order=True, object_info=True,
-                         directory=tempfile.gettempdir(), cache=True, show_progress=True, timeout=300, open_pdf=None, open_file=True, file_format='pdf'):
+                         ukidss=True, vhs=True, vvv=True, viking=True, ps1=True, decam=True, neowise=True, neowise_contrast=3, chrono_order=True,
+                         object_info=True,  directory=tempfile.gettempdir(), cache=True, show_progress=True, timeout=300,
+                         open_pdf=None, open_file=True, file_format='pdf'):
     """
     Creates multi-bands finder charts from image data of following sky surveys:
     - DSS (DSS1 B, DSS1 R, DSS2 B, DSS2 R, DSS2 IR),
@@ -42,6 +43,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
     - UKIDSS (Y, J, H, K),
     - UHS (J),
     - VHS (Y, J, H, K),
+    - VVV (Z, Y, J, H, K),
+    - Viking (Z, Y, J, H, K),
     - Pan-STARRS (g, r, i, z, y),
     - DECam (g, r, i, z, Y).
 
@@ -73,6 +76,10 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         Whether to create UKIDSS image series. The default is True.
     vhs : bool, optional
         Whether to create VHS image series. The default is True.
+    vvv : bool, optional
+        Whether to create VVV image series. The default is True.
+    viking : bool, optional
+        Whether to create Viking image series. The default is True.
     ps1 : bool, optional
         Whether to create Pan-STARRS image series. The default is True.
     decam : bool, optional
@@ -188,9 +195,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 ax = fig.add_subplot(rows, cols, img_idx, projection=wcs)
                 ax.plot(x, y, 'ro', fillstyle='none', markersize=7, markeredgewidth=0.2)
                 ax.plot(x, y, 'ro', fillstyle='none', markersize=0.2, markeredgewidth=0.2)
-                ax.text(0.04, 0.90, band, color='black', fontsize=1.8, transform=ax.transAxes,
+                ax.text(0.035, 0.90, band, color='black', fontsize=1.6, transform=ax.transAxes,
                         bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
-                ax.text(0.04, 0.06, year_obs, color='black', fontsize=1.8, transform=ax.transAxes,
+                ax.text(0.035, 0.05, year_obs, color='black', fontsize=1.6, transform=ax.transAxes,
                         bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
                 ax.add_patch(Rectangle((0, 0), 1, 1, fill=False, lw=0.2, ec='black', transform=ax.transAxes))
 
@@ -244,10 +251,10 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 print(traceback.format_exc())
                 return None
 
-        def get_VHS_image(ra, dec, band, size):
+        def get_VSA_image(ra, dec, band, size, database, frame_type):
             try:
-                return Vsa.get_images(SkyCoord(ra, dec, unit=(u.deg, u.deg)), image_width=size * u.arcsec, database='VHSDR6',
-                                      waveband=band, frame_type='tilestack', verbose=False, show_progress=show_progress)
+                return Vsa.get_images(SkyCoord(ra, dec, unit=(u.deg, u.deg)), image_width=size * u.arcsec, database=database,
+                                      waveband=band, frame_type=frame_type, verbose=False, show_progress=show_progress)
             except:
                 print('A problem occurred while downloading VHS images for object ra={ra}, dec={dec}, band={band}'.format(ra=ra, dec=dec, band=band))
                 print(traceback.format_exc())
@@ -337,7 +344,6 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         fig = plt.figure()
         fig.set_figheight(5)
         fig.set_figwidth(5)
-        plt.subplots_adjust(wspace=0, hspace=0.05, right=0.5)
 
         coords = SkyCoord(ra*u.deg, dec*u.deg)
         radius = (img_size*math.sqrt(2)/2)*u.arcsec
@@ -548,7 +554,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         op3 = table['W3mag']
                         op4 = table['W4mag']
                 except:
-                    print('A problem occurred while downloading 2MASS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                    print('A problem occurred while downloading AllWISE catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
             image = get_IRSA_image(ra, dec, 'wise', 'wise_bands=1', img_size)
@@ -605,9 +611,10 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             date_pattern = '%Y-%m-%d'
             survey = []
 
+            database = 'UKIDSSDR11PLUS'
             if overlays:
                 try:
-                    table = Ukidss.query_region(coords, radius, database='UKIDSSDR11PLUS', programme_id='LAS')
+                    table = Ukidss.query_region(coords, radius, database=database, programme_id='LAS')
                     if table:
                         overlay_ra = table['ra']
                         overlay_dec = table['dec']
@@ -616,10 +623,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         op3 = table['hAperMag3']
                         op4 = table['kAperMag3']
                 except:
-                    print('A problem occurred while downloading 2MASS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                    print('A problem occurred while downloading UKIDSS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
-            database = 'UKIDSSDR11PLUS'
             images = get_UKIDSS_image(ra, dec, 'Y', img_size, database)
             if images:
                 data, x, y, wcs = process_image_data(images[0][1])
@@ -683,9 +689,10 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             date_pattern = '%Y-%m-%d'
             survey = []
 
+            database = 'VHSDR6'
             if overlays:
                 try:
-                    table = Vsa.query_region(coords, radius, database='VHSDR6', programme_id='VHS')
+                    table = Vsa.query_region(coords, radius, database=database, programme_id='VHS')
                     if table:
                         overlay_ra = table['ra']
                         overlay_dec = table['dec']
@@ -694,17 +701,18 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         op3 = table['hAperMag3']
                         op4 = table['ksAperMag3']
                 except:
-                    print('A problem occurred while downloading 2MASS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                    print('A problem occurred while downloading VHS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
-            images = get_VHS_image(ra, dec, 'Y', img_size)
+            frame_type = 'tilestack'
+            images = get_VSA_image(ra, dec, 'Y', img_size, database, frame_type)
             if images:
                 data, x, y, wcs = process_image_data(images[0][1])
                 survey.append(ImageBucket(data, x, y, 'VHS Y', get_year_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op1))
             else:
                 survey.append(None)
 
-            images = get_VHS_image(ra, dec, 'J', img_size)
+            images = get_VSA_image(ra, dec, 'J', img_size, database, frame_type)
             if images:
                 year_b = get_year_obs(images[0][1], date_obs_key, date_pattern)
                 b, x, y, wcs = process_image_data(images[0][1])
@@ -712,7 +720,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            images = get_VHS_image(ra, dec, 'H', img_size)
+            images = get_VSA_image(ra, dec, 'H', img_size, database, frame_type)
             if images:
                 year_g = get_year_obs(images[0][1], date_obs_key, date_pattern)
                 g, x, y, wcs = process_image_data(images[0][1])
@@ -720,7 +728,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            images = get_VHS_image(ra, dec, 'Ks', img_size)
+            images = get_VSA_image(ra, dec, 'Ks', img_size, database, frame_type)
             if images:
                 year_r = get_year_obs(images[0][1], date_obs_key, date_pattern)
                 r, x, y, wcs = process_image_data(images[0][1])
@@ -737,6 +745,158 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             survey.insert(0, mean_obs_year)
 
             survey.append(None)
+
+            surveys.append(survey)
+
+        # VVV
+        if vvv:
+            x = y = 0
+            r = g = b = None
+            mean_obs_year = 0
+            year_r = year_g = year_b = np.nan
+            overlay_ra = overlay_dec = op1 = op2 = op3 = op4 = op5 = None
+            date_obs_key = 'DATE-OBS'
+            date_pattern = '%Y-%m-%d'
+            survey = []
+
+            database = 'VVVDR5'
+            if overlays:
+                try:
+                    table = Vsa.query_region(coords, radius, database=database, programme_id='VVV')
+                    if table:
+                        overlay_ra = table['ra']
+                        overlay_dec = table['dec']
+                        op1 = table['zAperMag3']
+                        op2 = table['yAperMag3']
+                        op3 = table['jAperMag3']
+                        op4 = table['hAperMag3']
+                        op5 = table['ksAperMag3']
+                except:
+                    print('A problem occurred while downloading VVV catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                    print(traceback.format_exc())
+
+            frame_type = 'deep_stack'
+            images = get_VSA_image(ra, dec, 'Z', img_size, database, frame_type)
+            if images:
+                data, x, y, wcs = process_image_data(images[0][1])
+                survey.append(ImageBucket(data, x, y, 'VVV Z', get_year_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op1))
+            else:
+                survey.append(None)
+
+            images = get_VSA_image(ra, dec, 'Y', img_size, database, frame_type)
+            if images:
+                data, x, y, wcs = process_image_data(images[0][1])
+                survey.append(ImageBucket(data, x, y, 'VVV Y', get_year_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op2))
+            else:
+                survey.append(None)
+
+            images = get_VSA_image(ra, dec, 'J', img_size, database, frame_type)
+            if images:
+                year_b = get_year_obs(images[0][1], date_obs_key, date_pattern)
+                b, x, y, wcs = process_image_data(images[0][1])
+                survey.append(ImageBucket(b, x, y, 'VVV J', year_b, wcs, overlay_ra, overlay_dec, op3))
+            else:
+                survey.append(None)
+
+            images = get_VSA_image(ra, dec, 'H', img_size, database, frame_type)
+            if images:
+                year_g = get_year_obs(images[0][1], date_obs_key, date_pattern)
+                g, x, y, wcs = process_image_data(images[0][1])
+                survey.append(ImageBucket(g, x, y, 'VVV H', year_g, wcs, overlay_ra, overlay_dec, op4))
+            else:
+                survey.append(None)
+
+            images = get_VSA_image(ra, dec, 'Ks', img_size, database, frame_type)
+            if images:
+                year_r = get_year_obs(images[0][1], date_obs_key, date_pattern)
+                r, x, y, wcs = process_image_data(images[0][1])
+                survey.append(ImageBucket(r, x, y, 'VVV K', year_r, wcs, overlay_ra, overlay_dec, op5))
+            else:
+                survey.append(None)
+
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+                mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
+                survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'VVV K-H-J', mean_obs_year, wcs))
+            else:
+                survey.insert(0, None)
+
+            survey.insert(0, mean_obs_year)
+
+            surveys.append(survey)
+
+        # Viking
+        if viking:
+            x = y = 0
+            r = g = b = None
+            mean_obs_year = 0
+            year_r = year_g = year_b = np.nan
+            overlay_ra = overlay_dec = op1 = op2 = op3 = op4 = op5 = None
+            date_obs_key = 'DATE-OBS'
+            date_pattern = '%Y-%m-%d'
+            survey = []
+
+            database = 'VIKINGDR5'
+            if overlays:
+                try:
+                    table = Vsa.query_region(coords, radius, database=database, programme_id='Viking')
+                    if table:
+                        overlay_ra = table['ra']
+                        overlay_dec = table['dec']
+                        op1 = table['zAperMag3']
+                        op2 = table['yAperMag3']
+                        op3 = table['jAperMag3']
+                        op4 = table['hAperMag3']
+                        op5 = table['ksAperMag3']
+                except:
+                    print('A problem occurred while downloading Viking catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                    print(traceback.format_exc())
+
+            frame_type = 'tilestack'
+            images = get_VSA_image(ra, dec, 'Z', img_size, database, frame_type)
+            if images:
+                data, x, y, wcs = process_image_data(images[0][1])
+                survey.append(ImageBucket(data, x, y, 'Viking Z', get_year_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op1))
+            else:
+                survey.append(None)
+
+            images = get_VSA_image(ra, dec, 'Y', img_size, database, frame_type)
+            if images:
+                data, x, y, wcs = process_image_data(images[0][1])
+                survey.append(ImageBucket(data, x, y, 'Viking Y', get_year_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op2))
+            else:
+                survey.append(None)
+
+            images = get_VSA_image(ra, dec, 'J', img_size, database, frame_type)
+            if images:
+                year_b = get_year_obs(images[0][1], date_obs_key, date_pattern)
+                b, x, y, wcs = process_image_data(images[0][1])
+                survey.append(ImageBucket(b, x, y, 'Viking J', year_b, wcs, overlay_ra, overlay_dec, op3))
+            else:
+                survey.append(None)
+
+            images = get_VSA_image(ra, dec, 'H', img_size, database, frame_type)
+            if images:
+                year_g = get_year_obs(images[0][1], date_obs_key, date_pattern)
+                g, x, y, wcs = process_image_data(images[0][1])
+                survey.append(ImageBucket(g, x, y, 'Viking H', year_g, wcs, overlay_ra, overlay_dec, op4))
+            else:
+                survey.append(None)
+
+            images = get_VSA_image(ra, dec, 'Ks', img_size, database, frame_type)
+            if images:
+                year_r = get_year_obs(images[0][1], date_obs_key, date_pattern)
+                r, x, y, wcs = process_image_data(images[0][1])
+                survey.append(ImageBucket(r, x, y, 'Viking K', year_r, wcs, overlay_ra, overlay_dec, op5))
+            else:
+                survey.append(None)
+
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+                mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
+                survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'Viking K-H-J', mean_obs_year, wcs))
+            else:
+                survey.insert(0, None)
+
+            survey.insert(0, mean_obs_year)
 
             surveys.append(survey)
 
@@ -794,7 +954,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                                 op4 = table['zMeanPSFMag']
                                 op5 = table['yMeanPSFMag']
                         except:
-                            print('A problem occurred while downloading 2MASS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                            print('A problem occurred while downloading Pan-STARRS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                             print(traceback.format_exc())
 
                     year_b = get_year_obs(images['g'][0], date_obs_key, date_pattern)
@@ -956,7 +1116,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         if chrono_order:
             surveys.sort(key=lambda x: x[0])  # sort by mean observation year
         cols = 6
-        rows = 12
+        rows = 14
         img_idx = 0
         info_idx = 0
         for survey in surveys:
@@ -977,7 +1137,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         if object_info:
             # Info text
-            fontsize = 2.4
+            fontsize = 2.0
             ax = fig.add_subplot(rows, cols, info_idx)
             ax.text(0.05, 0.70, r'$\alpha$ = ' + str(round(coords.ra.value, 6)), fontsize=fontsize, transform=ax.transAxes)
             ax.text(0.05, 0.55, r'$\delta$ = ' + str(round(coords.dec.value, 6)), fontsize=fontsize, transform=ax.transAxes)
@@ -990,14 +1150,15 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             hms = hmsdms[0:11]
             dms = hmsdms[12:24] if dec < 0 else hmsdms[13:24]
             ax = fig.add_subplot(rows, cols, info_idx + 1)
-            ax.text(0, 0.70, '(' + hms + ')', fontsize=fontsize, transform=ax.transAxes)
-            ax.text(0, 0.55, '(' + dms + ')', fontsize=fontsize, transform=ax.transAxes)
-            ax.text(0, 0.40, 'Size = ' + str(int(img_size)) + ' arcsec', fontsize=fontsize, transform=ax.transAxes)
-            ax.text(0, 0.25, 'North up, East left', fontsize=fontsize, transform=ax.transAxes)
+            ax.text(0, 0.72, '(' + hms + ')', fontsize=fontsize, transform=ax.transAxes)
+            ax.text(0, 0.57, '(' + dms + ')', fontsize=fontsize, transform=ax.transAxes)
+            ax.text(0, 0.42, 'Size = ' + str(int(img_size)) + ' arcsec', fontsize=fontsize, transform=ax.transAxes)
+            ax.text(0, 0.27, 'North up, East left', fontsize=fontsize, transform=ax.transAxes)
             ax.axis('off')
 
         # Save and open the PDF file
         filename = create_obj_name(ra, dec) + '.' + file_format
+        plt.subplots_adjust(wspace=0, hspace=0.05, right=0.45)
         plt.savefig(filename, dpi=600, bbox_inches='tight', format=file_format)
         plt.close()
 

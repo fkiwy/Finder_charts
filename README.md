@@ -2,6 +2,8 @@
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7111737.svg)](https://doi.org/10.5281/zenodo.7111737)
 
+[![astropy](http://img.shields.io/badge/powered%20by-AstroPy-orange.svg?style=flat)](http://www.astropy.org/)
+
  ```Finder_charts``` is a Python module to create multi-bands finder charts from image data of following sky surveys:
 - DSS (DSS1 B, DSS1 R, DSS2 B, DSS2 R, DSS2 IR),
 - 2MASS (J, H, K),
@@ -10,6 +12,8 @@
 - UKIDSS (Y, J, H, K),
 - UHS (J),
 - VHS (Y, J, H, K),
+- VVV (Z, Y, J, H, K),
+- Viking (Z, Y, J, H, K),
 - Pan-STARRS (g, r, i, z, y),
 - DECam (g, r, i, z, Y).
 
@@ -42,6 +46,8 @@ The Python Standard Library, NumPy, Matplotlib, Astropy and Pillow (PIL Fork)
 - ```wise``` : whether to create WISE image series (type: bool, default: True)
 - ```ukidss``` : whether to create UKIDSS image series (type: bool, default: True)
 - ```vhs``` : whether to create VHS image series (type: bool, default: True)
+- ```vvv``` : whether to create VVV image series (type: bool, default: True)
+- ```viking``` : whether to create Viking image series (type: bool, default: True)
 - ```ps1``` : whether to create Pan-STARRS image series (type: bool, default: True)
 - ```decam``` : whether to create DECam image series (type: bool, default: True)
 - ```neowise``` : whether to create WISE time series (type: bool, default: True)
