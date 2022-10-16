@@ -126,10 +126,6 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             self.overlay_dec = overlay_dec
             self.overlay_phot = overlay_phot
 
-    # Parameter deprecation warnings
-    if open_pdf is not None:
-        warnings.warn('Parameter ``open_pdf`` is deprecated. Please use ``open_file`` instead.', DeprecationWarning, stacklevel=2)
-
     def finder_charts(ra, dec):
 
         def process_image_data(hdu):
@@ -149,7 +145,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     return data, x, y, wcs
                 else:
                     return None, 0, 0, None
-            except:
+            except Exception:
                 print('A problem occurred while creating an image for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                 print(traceback.format_exc())
                 return None, 0, 0, None
@@ -157,7 +153,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         def create_color_image(r, g, b, neowise=False):
             try:
                 if r is None or g is None or b is None:
-                    return
+                    return None
 
                 if neowise:
                     vmin, vmax = get_min_max(g, lo=neowise_contrast, hi=100-neowise_contrast)
@@ -172,7 +168,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     image = Image.merge('RGB', (r, g, b))
 
                 return np.array(image)
-            except:
+            except Exception:
                 print('A problem occurred while creating a color image for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                 print(traceback.format_exc())
                 return None
@@ -208,7 +204,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 vmin, vmax = get_min_max(data)
                 ax.imshow(data, vmin=vmin, vmax=vmax, cmap='gray_r')
                 ax.axis('off')
-            except:
+            except Exception:
                 print('A problem occurred while plotting an image for object ra={ra}, dec={dec}, band={band}'.format(ra=ra, dec=dec, band=band))
                 print(traceback.format_exc())
 
@@ -230,7 +226,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             download_url = download_url.format(ra=ra, dec=dec, size=round(size/2.75), band=band, epoch=epoch)
             try:
                 return fits.open(download_file(download_url, cache=cache, show_progress=show_progress, timeout=timeout))
-            except:
+            except Exception:
                 return None
 
         def get_IRSA_image(ra, dec, survey, band, size):
@@ -239,14 +235,14 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             download_url = download_url.format(ra=ra, dec=dec, size=size/60, survey=survey, band=band)
             try:
                 return fits.open(download_file(download_url, cache=cache, show_progress=show_progress, timeout=timeout))
-            except:
+            except Exception:
                 return None
 
         def get_UKIDSS_image(ra, dec, band, size, database):
             try:
                 return Ukidss.get_images(SkyCoord(ra, dec, unit=(u.deg, u.deg)), image_width=size * u.arcsec, database=database,
                                          waveband=band, frame_type='stack', verbose=False, show_progress=show_progress)
-            except:
+            except Exception:
                 print('A problem occurred while downloading UKIDSS images for object ra={ra}, dec={dec}, band={band}'.format(ra=ra, dec=dec, band=band))
                 print(traceback.format_exc())
                 return None
@@ -255,7 +251,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             try:
                 return Vsa.get_images(SkyCoord(ra, dec, unit=(u.deg, u.deg)), image_width=size * u.arcsec, database=database,
                                       waveband=band, frame_type=frame_type, verbose=False, show_progress=show_progress)
-            except:
+            except Exception:
                 print('A problem occurred while downloading VHS images for object ra={ra}, dec={dec}, band={band}'.format(ra=ra, dec=dec, band=band))
                 print(traceback.format_exc())
                 return None
@@ -275,7 +271,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     return image, instrument
                 else:
                     return None, None
-            except:
+            except Exception:
                 print('A problem occurred while downloading DECam images for object ra={ra}, dec={dec}, band={band}'.format(ra=ra, dec=dec, band=band))
                 print(traceback.format_exc())
                 return None, None
@@ -431,7 +427,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         op1 = table['Jmag']
                         op2 = table['Hmag']
                         op3 = table['Kmag']
-                except:
+                except Exception:
                     print('A problem occurred while downloading 2MASS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
@@ -553,7 +549,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         op2 = table['W2mag']
                         op3 = table['W3mag']
                         op4 = table['W4mag']
-                except:
+                except Exception:
                     print('A problem occurred while downloading AllWISE catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
@@ -622,7 +618,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         op2 = table['jAperMag3']
                         op3 = table['hAperMag3']
                         op4 = table['kAperMag3']
-                except:
+                except Exception:
                     print('A problem occurred while downloading UKIDSS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
@@ -700,7 +696,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         op2 = table['jAperMag3']
                         op3 = table['hAperMag3']
                         op4 = table['ksAperMag3']
-                except:
+                except Exception:
                     print('A problem occurred while downloading VHS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
@@ -771,7 +767,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         op3 = table['jAperMag3']
                         op4 = table['hAperMag3']
                         op5 = table['ksAperMag3']
-                except:
+                except Exception:
                     print('A problem occurred while downloading VVV catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
@@ -847,7 +843,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         op3 = table['jAperMag3']
                         op4 = table['hAperMag3']
                         op5 = table['ksAperMag3']
-                except:
+                except Exception:
                     print('A problem occurred while downloading Viking catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
@@ -920,7 +916,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     'sep': 'comma'
                 }
                 text = requests.get(query_url, params=payload, timeout=timeout).text
-            except:
+            except Exception:
                 text = None
                 print('A problem occurred while downloading Pan-STARRS image urls for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                 print(traceback.format_exc())
@@ -935,7 +931,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         download_url = 'http://ps1images.stsci.edu/cgi-bin/fitscut.cgi?format=fits&red={filename}&ra={ra}&dec={dec}&size={size}'
                         download_url = download_url.format(filename=row['filename'], ra=ra, dec=dec, size=img_size*4)
                         images[row['filter']] = fits.open(download_file(download_url, cache=cache, show_progress=show_progress, timeout=timeout))
-                    except:
+                    except Exception:
                         print('A problem occurred while downloading Pan-STARRS images for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                         print(traceback.format_exc())
 
@@ -953,7 +949,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                                 op3 = table['iMeanPSFMag']
                                 op4 = table['zMeanPSFMag']
                                 op5 = table['yMeanPSFMag']
-                        except:
+                        except Exception:
                             print('A problem occurred while downloading Pan-STARRS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                             print(traceback.format_exc())
 
@@ -1079,7 +1075,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         header = hdu.header
                         meanmjd = (header['MJDMIN']+header['MJDMAX'])/2
                         year = get_year_from_mjd(meanmjd)
-                        if (year == prev_year):
+                        if year == prev_year:
                             dataW1 += hdu.data
                             dataW2 += imageW2[0].data
                             j += 1
@@ -1091,7 +1087,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                             dataW2 = imageW2[0].data
                             j = 1
                         prev_year = year
-                    except:
+                    except Exception:
                         print('A problem occurred while creating WISE time series for object ra={ra}, dec={dec}, epoch={epoch}'
                               .format(ra=ra, dec=dec, epoch=i))
                         print(traceback.format_exc())
@@ -1121,7 +1117,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         info_idx = 0
         for survey in surveys:
             survey = survey[1:len(survey)]
-            if all(image_bucket == None for image_bucket in survey):
+            if all(image_bucket is None for image_bucket in survey):
                 continue
             for image_bucket in survey:
                 img_idx += 1
@@ -1162,12 +1158,17 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         plt.savefig(filename, dpi=600, bbox_inches='tight', format=file_format)
         plt.close()
 
-        if (open_pdf if open_pdf is not None else open_file):
+        if open_pdf if open_pdf is not None else open_file:
             start_file(filename)
 
     # --------------------------------------
     # Code for create_finder_charts function
     # --------------------------------------
+
+    # Parameter deprecation warnings
+    if open_pdf is not None:
+        warnings.warn('Parameter ``open_pdf`` is deprecated. Please use ``open_file`` instead.', DeprecationWarning, stacklevel=2)
+
     warnings.simplefilter('ignore', category=AstropyWarning)
     os.chdir(directory)
 
@@ -1180,12 +1181,12 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         if not isinstance(dec, (collections.Sequence, np.ndarray)):
             raise Exception('Dec must be either a sequence or a numpy array')
 
-        if (len(ra) != len(dec)):
+        if len(ra) != len(dec):
             raise Exception('Ra and Dec must have the same length: len(ra)={ra}, len(dec)={dec}'.format(ra=len(ra), dec=len(dec)))
 
         for i in range(len(ra)):
             try:
                 finder_charts(ra[i], dec[i])
-            except:
+            except Exception:
                 print('A problem occurred while creating finder charts for object ra={ra}, dec={dec}'.format(ra=ra[i], dec=dec[i]))
                 print(traceback.format_exc())
