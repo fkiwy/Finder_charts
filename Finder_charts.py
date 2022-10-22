@@ -103,7 +103,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
     open_pdf : bool, optional
         Deprecated, replaced by ``open_file``.
     open_file : bool, optional
-        Whether to open the saved finder charts automatically (type: bool, default: True)
+        Whether to open the saved finder charts automatically. The default is True.
     file_format : str, optional
         Output file format: pdf, png, eps, etc.. The default is 'pdf'.
 
@@ -834,7 +834,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             database = 'VIKINGDR5'
             if overlays:
                 try:
-                    table = Vsa.query_region(coords, radius, database=database, programme_id='Viking')
+                    table = Vsa.query_region(coords, radius, database=database, programme_id='VIKING')
                     if table:
                         overlay_ra = table['ra']
                         overlay_dec = table['dec']
