@@ -32,8 +32,8 @@ from pyvo.dal import sia
 
 def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='red', dss=True, twomass=True, spitzer=True, wise=True,
                          ukidss=True, vhs=True, vvv=True, viking=True, ps1=True, decam=True, neowise=True, neowise_contrast=3, chrono_order=True,
-                         object_info=True,  directory=tempfile.gettempdir(), cache=True, show_progress=True, timeout=300,
-                         open_pdf=None, open_file=True, file_format='pdf'):
+                         object_info=True,  directory=tempfile.gettempdir(), cache=True, show_progress=True, timeout=300, open_pdf=None, open_file=True,
+                         file_format='pdf', save_result_tables=False, result_tables_format='ipac', result_tables_extension='dat'):
     """
     Creates multi-bands finder charts from image data of following sky surveys:
     - DSS (DSS1 B, DSS1 R, DSS2 B, DSS2 R, DSS2 IR),
@@ -44,7 +44,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
     - UHS (J),
     - VHS (Y, J, H, K),
     - VVV (Z, Y, J, H, K),
-    - Viking (Z, Y, J, H, K),
+    - VIKING (Z, Y, J, H, K),
     - Pan-STARRS (g, r, i, z, y),
     - DECam (g, r, i, z, Y).
 
@@ -79,7 +79,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
     vvv : bool, optional
         Whether to create VVV image series. The default is True.
     viking : bool, optional
-        Whether to create Viking image series. The default is True.
+        Whether to create VIKING image series. The default is True.
     ps1 : bool, optional
         Whether to create Pan-STARRS image series. The default is True.
     decam : bool, optional
@@ -106,6 +106,12 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         Whether to open the saved finder charts automatically. The default is True.
     file_format : str, optional
         Output file format: pdf, png, eps, etc.. The default is 'pdf'.
+    save_result_tables : bool, optional
+        Whether to save the catalog search result tables to the specified directory. The default is False.
+    result_tables_format : str, optional
+        Catalog search result tables output format. The default is 'ipac'.
+    result_tables_extension : str, optional
+        Catalog search result tables file extension. The default is 'dat'.
 
     Raises
     ------
@@ -197,7 +203,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
                 ax.add_patch(Rectangle((0, 0), 1, 1, fill=False, lw=0.2, ec='black', transform=ax.transAxes))
 
-                if overlay_ra is not None and overlay_dec is not None and overlay_phot is not None:
+                if overlays and overlay_ra is not None and overlay_dec is not None and overlay_phot is not None:
                     ax.scatter(overlay_ra, overlay_dec, transform=ax.get_transform('icrs'), s=0/overlay_phot + 1.0,
                                edgecolor=overlay_color, facecolor='none', linewidths=0.2)
 
@@ -299,7 +305,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 else:
                     return None
             except Exception:
-                print('A problem occurred while downloading Noirlab catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                print('A problem occurred while downloading Noirlab catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                 print(traceback.format_exc())
                 return None
 
@@ -326,6 +332,11 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             ra_str = str(ra)
             dec_str = str(dec) if dec < 0 else '+' + str(dec)
             return ra_str + dec_str
+
+        def save_catalog_search_results(result_table, survey, ra, dec):
+            if save_result_tables:
+                file_name = 'Finder_charts_' + survey + '_results_' + create_obj_name(ra, dec) + '.' + result_tables_extension
+                result_table.write(file_name, format=result_tables_format, overwrite=True)
 
         def start_file(filename):
             if sys.platform == 'win32':
@@ -416,9 +427,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             date_pattern = '%y%m%d'
             survey = []
 
-            if overlays:
+            if overlays or save_result_tables:
                 try:
-                    v = Vizier(columns=['RAJ2000', 'DEJ2000', 'Jmag', 'Hmag',  'Kmag'])
+                    v = Vizier(columns=['+_r', 'all'])
                     tables = v.query_region(coords, radius=radius, catalog='II/246/out')
                     if tables:
                         table = tables[0]
@@ -427,8 +438,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         op1 = table['Jmag']
                         op2 = table['Hmag']
                         op3 = table['Kmag']
+                        save_catalog_search_results(table, '2MASS', ra, dec)
                 except Exception:
-                    print('A problem occurred while downloading 2MASS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                    print('A problem occurred while downloading 2MASS catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
             image = get_IRSA_image(ra, dec, '2mass', 'twomass_bands=j', img_size)
@@ -537,9 +549,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             date_pattern = '%Y-%m-%d'
             survey = []
 
-            if overlays:
+            if overlays or save_result_tables:
                 try:
-                    v = Vizier(columns=['RAJ2000', 'DEJ2000', 'W1mag', 'W2mag', 'W3mag', 'W4mag'])
+                    v = Vizier(columns=['+_r', 'all'])
                     tables = v.query_region(coords, radius=radius, catalog='II/328/allwise')
                     if tables:
                         table = tables[0]
@@ -549,8 +561,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         op2 = table['W2mag']
                         op3 = table['W3mag']
                         op4 = table['W4mag']
+                        save_catalog_search_results(table, 'AllWISE', ra, dec)
                 except Exception:
-                    print('A problem occurred while downloading AllWISE catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                    print('A problem occurred while downloading AllWISE catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
             image = get_IRSA_image(ra, dec, 'wise', 'wise_bands=1', img_size)
@@ -608,18 +621,20 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             survey = []
 
             database = 'UKIDSSDR11PLUS'
-            if overlays:
+            if overlays or save_result_tables:
                 try:
                     table = Ukidss.query_region(coords, radius, database=database, programme_id='LAS')
                     if table:
+                        table.sort('distance')
                         overlay_ra = table['ra']
                         overlay_dec = table['dec']
                         op1 = table['yAperMag3']
                         op2 = table['jAperMag3']
                         op3 = table['hAperMag3']
                         op4 = table['kAperMag3']
+                        save_catalog_search_results(table, 'UKIDSS_DR11', ra, dec)
                 except Exception:
-                    print('A problem occurred while downloading UKIDSS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                    print('A problem occurred while downloading UKIDSS catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
             images = get_UKIDSS_image(ra, dec, 'Y', img_size, database)
@@ -686,18 +701,20 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             survey = []
 
             database = 'VHSDR6'
-            if overlays:
+            if overlays or save_result_tables:
                 try:
                     table = Vsa.query_region(coords, radius, database=database, programme_id='VHS')
                     if table:
+                        table.sort('distance')
                         overlay_ra = table['ra']
                         overlay_dec = table['dec']
                         op1 = table['yAperMag3']
                         op2 = table['jAperMag3']
                         op3 = table['hAperMag3']
                         op4 = table['ksAperMag3']
+                        save_catalog_search_results(table, 'VHS_DR6', ra, dec)
                 except Exception:
-                    print('A problem occurred while downloading VHS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                    print('A problem occurred while downloading VHS catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
             frame_type = 'tilestack'
@@ -756,10 +773,11 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             survey = []
 
             database = 'VVVDR5'
-            if overlays:
+            if overlays or save_result_tables:
                 try:
                     table = Vsa.query_region(coords, radius, database=database, programme_id='VVV')
                     if table:
+                        table.sort('distance')
                         overlay_ra = table['ra']
                         overlay_dec = table['dec']
                         op1 = table['zAperMag3']
@@ -767,8 +785,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         op3 = table['jAperMag3']
                         op4 = table['hAperMag3']
                         op5 = table['ksAperMag3']
+                        save_catalog_search_results(table, 'VVV_DR5', ra, dec)
                 except Exception:
-                    print('A problem occurred while downloading VVV catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                    print('A problem occurred while downloading VVV catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
             frame_type = 'deep_stack'
@@ -820,7 +839,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
             surveys.append(survey)
 
-        # Viking
+        # VIKING
         if viking:
             x = y = 0
             r = g = b = None
@@ -832,10 +851,11 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             survey = []
 
             database = 'VIKINGDR5'
-            if overlays:
+            if overlays or save_result_tables:
                 try:
                     table = Vsa.query_region(coords, radius, database=database, programme_id='VIKING')
                     if table:
+                        table.sort('distance')
                         overlay_ra = table['ra']
                         overlay_dec = table['dec']
                         op1 = table['zAperMag3']
@@ -843,22 +863,23 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         op3 = table['jAperMag3']
                         op4 = table['hAperMag3']
                         op5 = table['ksAperMag3']
+                        save_catalog_search_results(table, 'VIKING_DR5', ra, dec)
                 except Exception:
-                    print('A problem occurred while downloading Viking catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                    print('A problem occurred while downloading VIKING catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
             frame_type = 'tilestack'
             images = get_VSA_image(ra, dec, 'Z', img_size, database, frame_type)
             if images:
                 data, x, y, wcs = process_image_data(images[0][1])
-                survey.append(ImageBucket(data, x, y, 'Viking Z', get_year_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op1))
+                survey.append(ImageBucket(data, x, y, 'VIKING Z', get_year_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op1))
             else:
                 survey.append(None)
 
             images = get_VSA_image(ra, dec, 'Y', img_size, database, frame_type)
             if images:
                 data, x, y, wcs = process_image_data(images[0][1])
-                survey.append(ImageBucket(data, x, y, 'Viking Y', get_year_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op2))
+                survey.append(ImageBucket(data, x, y, 'VIKING Y', get_year_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op2))
             else:
                 survey.append(None)
 
@@ -866,7 +887,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             if images:
                 year_b = get_year_obs(images[0][1], date_obs_key, date_pattern)
                 b, x, y, wcs = process_image_data(images[0][1])
-                survey.append(ImageBucket(b, x, y, 'Viking J', year_b, wcs, overlay_ra, overlay_dec, op3))
+                survey.append(ImageBucket(b, x, y, 'VIKING J', year_b, wcs, overlay_ra, overlay_dec, op3))
             else:
                 survey.append(None)
 
@@ -874,7 +895,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             if images:
                 year_g = get_year_obs(images[0][1], date_obs_key, date_pattern)
                 g, x, y, wcs = process_image_data(images[0][1])
-                survey.append(ImageBucket(g, x, y, 'Viking H', year_g, wcs, overlay_ra, overlay_dec, op4))
+                survey.append(ImageBucket(g, x, y, 'VIKING H', year_g, wcs, overlay_ra, overlay_dec, op4))
             else:
                 survey.append(None)
 
@@ -882,13 +903,13 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             if images:
                 year_r = get_year_obs(images[0][1], date_obs_key, date_pattern)
                 r, x, y, wcs = process_image_data(images[0][1])
-                survey.append(ImageBucket(r, x, y, 'Viking K', year_r, wcs, overlay_ra, overlay_dec, op5))
+                survey.append(ImageBucket(r, x, y, 'VIKING K', year_r, wcs, overlay_ra, overlay_dec, op5))
             else:
                 survey.append(None)
 
             if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
-                survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'Viking K-H-J', mean_obs_year, wcs))
+                survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'VIKING K-H-J', mean_obs_year, wcs))
             else:
                 survey.insert(0, None)
 
@@ -936,11 +957,10 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         print(traceback.format_exc())
 
                 if images:
-                    if overlays:
+                    if overlays or save_result_tables:
                         try:
-                            columns = ['raMean', 'decMean', 'gMeanPSFMag',  'rMeanPSFMag', 'iMeanPSFMag', 'zMeanPSFMag', 'yMeanPSFMag']
                             table = Catalogs.query_region(coords, radius=radius, catalog='Panstarrs', data_release='dr2', table='mean',
-                                                          nStackDetections=[('gte', 2)], columns=columns)
+                                                          nStackDetections=[('gte', 2)], sort_by=[('asc', 'distance')])
                             if table:
                                 overlay_ra = table['raMean']
                                 overlay_dec = table['decMean']
@@ -949,8 +969,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                                 op3 = table['iMeanPSFMag']
                                 op4 = table['zMeanPSFMag']
                                 op5 = table['yMeanPSFMag']
+                                save_catalog_search_results(table, 'PS1_DR2', ra, dec)
                         except Exception:
-                            print('A problem occurred while downloading Pan-STARRS catalog overlays for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                            print('A problem occurred while downloading Pan-STARRS catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                             print(traceback.format_exc())
 
                     year_b = get_year_obs(images['g'][0], date_obs_key, date_pattern)
@@ -992,7 +1013,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             date_pattern = 'MJD'
             survey = []
 
-            if overlays:
+            if overlays or save_result_tables:
+                """
                 table = search_noirlab(ra, dec, radius)
                 if table:
                     overlay_ra = table['ra']
@@ -1002,6 +1024,23 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     op3 = table['imag']
                     op4 = table['zmag']
                     op5 = table['ymag']
+                """
+                try:
+                    v = Vizier(columns=['+_r', 'all'])
+                    tables = v.query_region(coords, radius=radius, catalog='II/357/des_dr1')
+                    if tables:
+                        table = tables[0]
+                        overlay_ra = table['RAJ2000']
+                        overlay_dec = table['DEJ2000']
+                        op1 = table['gmag']
+                        op2 = table['rmag']
+                        op3 = table['imag']
+                        op4 = table['zmag']
+                        op5 = table['Ymag']
+                        save_catalog_search_results(table, 'DES_DR1', ra, dec)
+                except Exception:
+                    print('A problem occurred while downloading DES catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                    print(traceback.format_exc())
 
             image, instrument = get_DECam_image(ra, dec, 'g', img_size)
             if image:
@@ -1153,7 +1192,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             ax.axis('off')
 
         # Save and open the PDF file
-        filename = create_obj_name(ra, dec) + '.' + file_format
+        filename = 'Finder_charts_' + create_obj_name(ra, dec) + '.' + file_format
         plt.subplots_adjust(wspace=0, hspace=0.05, right=0.45)
         plt.savefig(filename, dpi=600, bbox_inches='tight', format=file_format)
         plt.close()
