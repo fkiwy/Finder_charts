@@ -30,7 +30,7 @@ create_finder_charts(16.9701886, 0.6992208)
 ```
 
 The resulting finder charts are saved to the directory given by parameter ```directory``` and automatically opened if ```open_file``` is set to True.
-Catalog search results can be saved to the same directory by setting ```save_result_tables``` to True.</br>
+Catalog search results can be saved to the same directory by setting ```save_result_tables``` to True.
 This creates one file per catalog search results, e.g. Finder_charts_2MASS_results_16.970189+0.699221.dat :
 ```
 |    _r|   RAJ2000|   DEJ2000|errMaj|errMin|errPA|          _2MASS|  Jmag|Jcmsig|e_Jmag|      Jsnr|  Hmag|Hcmsig|e_Hmag|      Hsnr|  Kmag|Kcmsig|e_Kmag|      Ksnr|Qflg|Rflg|Bflg|Cflg|  Ndet|  prox|pxPA|    pxCntr|Xflg|Aflg|      Cntr|Hemis|      Date|Scan|   GLON|   GLAT| Xscan|    _tab1_36|Jpsfchi|Hpsfchi|Kpsfchi|Jstdap|e_Jstdap|Hstdap|e_Hstdap|Kstdap|e_Kstdap|edgeNS|edgeEW|edge| dup| use| opt|  Dopt|PAopt| Bmag| Rmag|Nopt|extKey|scanKey|coaddKey|coadd| Opt|
