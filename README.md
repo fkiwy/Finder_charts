@@ -29,9 +29,9 @@ from Finder_charts import create_finder_charts
 create_finder_charts(16.9701886, 0.6992208)
 ```
 
-The resulting finder charts are saved to the directory given by parameter ```directory``` and automatically opened if ```open_file``` is set to True.</br>
+The resulting finder charts are saved to the directory given by parameter ```directory``` and automatically opened if ```open_file``` is set to True.
 Catalog search results can be saved to the same directory by setting ```save_result_tables``` to True.</br>
-This creates one file per catalog search results e.g. Finder_charts_2MASS_results_16.970189+0.699221.dat :
+This creates one file per catalog search results, e.g. Finder_charts_2MASS_results_16.970189+0.699221.dat :
 ```
 |    _r|   RAJ2000|   DEJ2000|errMaj|errMin|errPA|          _2MASS|  Jmag|Jcmsig|e_Jmag|      Jsnr|  Hmag|Hcmsig|e_Hmag|      Hsnr|  Kmag|Kcmsig|e_Kmag|      Ksnr|Qflg|Rflg|Bflg|Cflg|  Ndet|  prox|pxPA|    pxCntr|Xflg|Aflg|      Cntr|Hemis|      Date|Scan|   GLON|   GLAT| Xscan|    _tab1_36|Jpsfchi|Hpsfchi|Kpsfchi|Jstdap|e_Jstdap|Hstdap|e_Hstdap|Kstdap|e_Kstdap|edgeNS|edgeEW|edge| dup| use| opt|  Dopt|PAopt| Bmag| Rmag|Nopt|extKey|scanKey|coaddKey|coadd| Opt|
 |double|    double|    double| float| float|  int|            char| float| float| float|    double| float| float| float|    double| float| float| float|    double|char|char|char|char|  char| float| int|      long| int| int|      long| char|      char| int| double| double| float|      double|  float|  float|  float| float|   float| float|   float| float|   float|  long|   int|char| int| int|char| float|  int|float|float| int|  long|   long|    long|  int|char|
