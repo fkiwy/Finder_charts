@@ -30,7 +30,7 @@ create_finder_charts(16.9701886, 0.6992208)
 ```
 
 The resulting finder charts are saved to the directory given by parameter ```directory``` and automatically opened if ```open_file``` is set to True.
-Catalog search results (i.a. used to create the overlays) can be saved to the same directory by setting ```save_result_tables``` to True.
+Catalog search results can be saved to the same directory by setting ```save_result_tables``` to True.
 ```
 |    _r|   RAJ2000|   DEJ2000|errMaj|errMin|errPA|          _2MASS|  Jmag|Jcmsig|e_Jmag|      Jsnr|  Hmag|Hcmsig|e_Hmag|      Hsnr|  Kmag|Kcmsig|e_Kmag|      Ksnr|Qflg|Rflg|Bflg|Cflg|  Ndet|  prox|pxPA|    pxCntr|Xflg|Aflg|      Cntr|Hemis|      Date|Scan|   GLON|   GLAT| Xscan|    _tab1_36|Jpsfchi|Hpsfchi|Kpsfchi|Jstdap|e_Jstdap|Hstdap|e_Hstdap|Kstdap|e_Kstdap|edgeNS|edgeEW|edge| dup| use| opt|  Dopt|PAopt| Bmag| Rmag|Nopt|extKey|scanKey|coaddKey|coadd| Opt|
 |double|    double|    double| float| float|  int|            char| float| float| float|    double| float| float| float|    double| float| float| float|    double|char|char|char|char|  char| float| int|      long| int| int|      long| char|      char| int| double| double| float|      double|  float|  float|  float| float|   float| float|   float| float|   float|  long|   int|char| int| int|char| float|  int|float|float| int|  long|   long|    long|  int|char|
@@ -77,4 +77,5 @@ The Python Standard Library, NumPy, Matplotlib, Astropy and Pillow (PIL Fork)
 
 ### Example output:
 ![Example output](example_output.png)
+#### Same output with catalog overlays:
 ![Example output](example_output_with_overlays.png)
