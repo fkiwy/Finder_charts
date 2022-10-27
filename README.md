@@ -1,6 +1,6 @@
 # Finder_charts
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7111737.svg)](https://doi.org/10.5281/zenodo.7111737)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7111737.svg)](https://doi.org/10.5281/zenodo.7111737) <a href="https://ascl.net/2210.004"><img src="https://img.shields.io/badge/ascl-2210.004-blue.svg?colorB=262255" alt="ascl:2210.004" /></a>
 
 [![astropy](http://img.shields.io/badge/powered%20by-AstroPy-orange.svg?style=flat)](http://www.astropy.org/)
 
