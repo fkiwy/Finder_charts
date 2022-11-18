@@ -141,7 +141,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 totValues = np.count_nonzero(data)
 
                 if nanValues < totValues * 0.5:
-                    wcs, shape = find_optimal_celestial_wcs([hdu], frame='icrs')
+                    wcs, shape = find_optimal_celestial_wcs([hdu])
                     data, _ = reproject_interp(hdu, wcs, shape_out=shape)
                     position = SkyCoord(ra*u.deg, dec*u.deg)
                     cutout = Cutout2D(data, position, img_size*u.arcsec, wcs=wcs, mode='partial')
