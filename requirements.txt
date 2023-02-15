@@ -1,0 +1,7 @@
+numpy
+matplotlib
+pillow
+requests
+astropy
+astroquery
+reproject

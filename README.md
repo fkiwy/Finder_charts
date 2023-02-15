@@ -45,6 +45,14 @@ This creates one file per catalog search results, e.g. Finder_charts_2MASS_resul
 ### Module dependencies:
 The Python Standard Library, NumPy, Matplotlib, Pillow (PIL Fork), Requests, Astropy, Astroquery and Reproject (the last two are Astropy affiliated packages)
 
+### Installation:
+The code can be installed as follows:
+```
+git clone https://github.com/fkiwy/Finder_charts.git
+cd Finder_charts
+python setup.py install
+```
+
 ### Parameter description:
 - ```ra``` : right ascension in decimal degrees (type: float)
 - ```dec``` : declination in decimal degrees (type: float)
