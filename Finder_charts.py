@@ -611,8 +611,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         # UKIDSS
         if ukidss:
-            x = y = 0
-            r = g = b = None
+            x = y = x_j = y_j = 0
+            r = g = b = wcs_j = None
             mean_obs_year = 0
             year_r = year_g = year_b = np.nan
             overlay_ra = overlay_dec = op1 = op2 = op3 = op4 = op5 = None
