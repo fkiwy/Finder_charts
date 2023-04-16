@@ -197,9 +197,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 ax = fig.add_subplot(rows, cols, img_idx, projection=wcs)
                 ax.plot(x, y, 'ro', fillstyle='none', markersize=7, markeredgewidth=0.2)
                 ax.plot(x, y, 'ro', fillstyle='none', markersize=0.2, markeredgewidth=0.2)
-                ax.text(0.035, 0.90, band, color='black', fontsize=1.6, transform=ax.transAxes,
+                ax.text(0.03, 0.93, band, color='black', fontsize=3.0, transform=ax.transAxes,
                         bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
-                ax.text(0.035, 0.05, year_obs, color='black', fontsize=1.6, transform=ax.transAxes,
+                ax.text(0.03, 0.04, year_obs, color='black', fontsize=3.0, transform=ax.transAxes,
                         bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
                 ax.add_patch(Rectangle((0, 0), 1, 1, fill=False, lw=0.2, ec='black', transform=ax.transAxes))
 
@@ -349,8 +349,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         # Code for finder_charts function
         # -------------------------------
         fig = plt.figure()
-        fig.set_figheight(5)
-        fig.set_figwidth(5)
+        fig.set_figheight(15)
+        fig.set_figwidth(15)
 
         coords = SkyCoord(ra*u.deg, dec*u.deg)
         radius = (img_size*math.sqrt(2)/2)*u.arcsec
@@ -974,23 +974,38 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                             print('A problem occurred while downloading Pan-STARRS catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                             print(traceback.format_exc())
 
-                    year_b = get_year_obs(images['g'][0], date_obs_key, date_pattern)
-                    b, x, y, wcs = process_image_data(images['g'][0])
-                    survey.append(ImageBucket(b, x, y, 'PS1 g', year_b, wcs, overlay_ra, overlay_dec, op1))
+                    if 'g' in images:
+                        year_b = get_year_obs(images['g'][0], date_obs_key, date_pattern)
+                        b, x, y, wcs = process_image_data(images['g'][0])
+                        survey.append(ImageBucket(b, x, y, 'PS1 g', year_b, wcs, overlay_ra, overlay_dec, op1))
+                    else:
+                        survey.append(None)
 
-                    data, x, y, wcs = process_image_data(images['r'][0])
-                    survey.append(ImageBucket(data, x, y, 'PS1 r', get_year_obs(images['r'][0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op2))
+                    if 'r' in images:
+                        data, x, y, wcs = process_image_data(images['r'][0])
+                        survey.append(ImageBucket(data, x, y, 'PS1 r', get_year_obs(images['r'][0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op2))
+                    else:
+                        survey.append(None)
 
-                    year_g = get_year_obs(images['i'][0], date_obs_key, date_pattern)
-                    g, x, y, wcs = process_image_data(images['i'][0])
-                    survey.append(ImageBucket(g, x, y, 'PS1 i', year_g, wcs, overlay_ra, overlay_dec, op3))
+                    if 'i' in images:
+                        year_g = get_year_obs(images['i'][0], date_obs_key, date_pattern)
+                        g, x, y, wcs = process_image_data(images['i'][0])
+                        survey.append(ImageBucket(g, x, y, 'PS1 i', year_g, wcs, overlay_ra, overlay_dec, op3))
+                    else:
+                        survey.append(None)
 
-                    data, x, y, wcs = process_image_data(images['z'][0])
-                    survey.append(ImageBucket(data, x, y, 'PS1 z', get_year_obs(images['z'][0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op4))
+                    if 'z' in images:
+                        data, x, y, wcs = process_image_data(images['z'][0])
+                        survey.append(ImageBucket(data, x, y, 'PS1 z', get_year_obs(images['z'][0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op4))
+                    else:
+                        survey.append(None)
 
-                    year_r = get_year_obs(images['y'][0], date_obs_key, date_pattern)
-                    r, x, y, wcs = process_image_data(images['y'][0])
-                    survey.append(ImageBucket(r, x, y, 'PS1 y', year_r, wcs, overlay_ra, overlay_dec, op5))
+                    if 'y' in images:
+                        year_r = get_year_obs(images['y'][0], date_obs_key, date_pattern)
+                        r, x, y, wcs = process_image_data(images['y'][0])
+                        survey.append(ImageBucket(r, x, y, 'PS1 y', year_r, wcs, overlay_ra, overlay_dec, op5))
+                    else:
+                        survey.append(None)
 
                     if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
                         mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
@@ -1172,7 +1187,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         if object_info:
             # Info text
-            fontsize = 2.0
+            fontsize = 5.0
             ax = fig.add_subplot(rows, cols, info_idx)
             ax.text(0.05, 0.70, r'$\alpha$ = ' + str(round(coords.ra.value, 6)), fontsize=fontsize, transform=ax.transAxes)
             ax.text(0.05, 0.55, r'$\delta$ = ' + str(round(coords.dec.value, 6)), fontsize=fontsize, transform=ax.transAxes)
@@ -1193,7 +1208,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         # Save and open the PDF file
         filename = 'Finder_charts_' + create_obj_name(ra, dec) + '.' + file_format
-        plt.subplots_adjust(wspace=0, hspace=0.05, right=0.45)
+        plt.subplots_adjust(wspace=0, hspace=0.05, right=0.44)
         plt.savefig(filename, dpi=600, bbox_inches='tight', format=file_format)
         plt.close()
 
