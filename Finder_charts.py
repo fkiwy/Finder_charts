@@ -8,6 +8,7 @@ import traceback
 import subprocess
 import collections
 import numpy as np
+from io import BytesIO
 from datetime import datetime
 from PIL import Image, ImageOps
 import matplotlib.pyplot as plt
@@ -17,12 +18,13 @@ from astropy.visualization import make_lupton_rgb
 from astropy.nddata import Cutout2D
 from astropy.io import fits
 from astropy.time import Time
+from astropy.table import Table
 from astropy.utils.exceptions import AstropyWarning
 from astropy.utils.data import download_file
 from astroquery.ukidss import Ukidss
 from astroquery.vsa import Vsa
 from astroquery.vizier import Vizier
-from astroquery.mast import Catalogs
+# from astroquery.mast import Catalogs
 import astropy.units as u
 from astropy.coordinates import SkyCoord
 from reproject.mosaicking import find_optimal_celestial_wcs
@@ -195,8 +197,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 overlay_phot = image_bucket.overlay_phot
 
                 ax = fig.add_subplot(rows, cols, img_idx, projection=wcs)
-                ax.plot(x, y, 'ro', fillstyle='none', markersize=7, markeredgewidth=0.2)
-                ax.plot(x, y, 'ro', fillstyle='none', markersize=0.2, markeredgewidth=0.2)
+                ax.plot(x, y, 'ro', fillstyle='none', markersize=9, markeredgewidth=0.3)
+                ax.plot(x, y, 'ro', fillstyle='none', markersize=0.3, markeredgewidth=0.3)
                 ax.text(0.03, 0.93, band, color='black', fontsize=3.0, transform=ax.transAxes,
                         bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
                 ax.text(0.03, 0.04, year_obs, color='black', fontsize=3.0, transform=ax.transAxes,
@@ -204,8 +206,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 ax.add_patch(Rectangle((0, 0), 1, 1, fill=False, lw=0.2, ec='black', transform=ax.transAxes))
 
                 if overlays and overlay_ra is not None and overlay_dec is not None and overlay_phot is not None:
-                    ax.scatter(overlay_ra, overlay_dec, transform=ax.get_transform('icrs'), s=0/overlay_phot + 1.0,
-                               edgecolor=overlay_color, facecolor='none', linewidths=0.2)
+                    ax.scatter(overlay_ra, overlay_dec, transform=ax.get_transform('icrs'), s=0/overlay_phot + 2.0,
+                               edgecolor=overlay_color, facecolor='none', linewidths=0.3)
 
                 vmin, vmax = get_min_max(data)
                 ax.imshow(data, vmin=vmin, vmax=vmax, cmap='gray_r')
@@ -307,6 +309,23 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             except Exception:
                 print('A problem occurred while downloading Noirlab catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                 print(traceback.format_exc())
+                return None
+
+        def get_ps1_detections(ra, dec, radius):
+            url = 'https://catalogs.mast.stsci.edu/api/v0.1/panstarrs/dr2/mean.csv'
+            params = {
+                'ra': ra,
+                'dec': dec,
+                'radius': radius.to(u.deg).value,
+                'nStackDetections.gte': 2
+            }
+            response = requests.get(url, params=params)
+            table = Table.read(BytesIO(response.content), format='ascii.csv')
+            if len(table) > 0:
+                table = table.filled(np.nan)
+                table.sort('distance')
+                return table
+            else:
                 return None
 
         def get_year_obs(hdu, date_obs_key, date_pattern):
@@ -959,8 +978,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 if images:
                     if overlays or save_result_tables:
                         try:
-                            table = Catalogs.query_region(coords, radius=radius, catalog='Panstarrs', data_release='dr2', table='mean',
-                                                          nStackDetections=[('gte', 2)], sort_by=[('asc', 'distance')])
+                            # table = Catalogs.query_region(coords, radius=radius, catalog='Panstarrs', data_release='dr2', table='mean',
+                            #                               nStackDetections=[('gte', 2)], sort_by=[('asc', 'distance')])
+                            table = get_ps1_detections(ra, dec, radius)
                             if table:
                                 overlay_ra = table['raMean']
                                 overlay_dec = table['decMean']
