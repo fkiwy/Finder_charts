@@ -321,7 +321,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 'columns': ['raMean', 'decMean', 'gMeanPSFMag', 'rMeanPSFMag', 'iMeanPSFMag', 'zMeanPSFMag', 'yMeanPSFMag', 'distance'],
                 'sort_by': ['distance']
             }
-            response = requests.get(url, params=params)
+            response = requests.get(url, params=params, timeout=timeout)
             table = Table.read(BytesIO(response.content), format='votable')
             if len(table) > 0:
                 table = table.filled(np.nan)
