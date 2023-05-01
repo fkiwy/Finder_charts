@@ -8,7 +8,6 @@ import traceback
 import subprocess
 import collections
 import numpy as np
-from io import BytesIO
 from datetime import datetime
 from PIL import Image, ImageOps
 import matplotlib.pyplot as plt
@@ -18,13 +17,12 @@ from astropy.visualization import make_lupton_rgb
 from astropy.nddata import Cutout2D
 from astropy.io import fits
 from astropy.time import Time
-from astropy.table import Table
 from astropy.utils.exceptions import AstropyWarning
 from astropy.utils.data import download_file
 from astroquery.ukidss import Ukidss
 from astroquery.vsa import Vsa
 from astroquery.vizier import Vizier
-# from astroquery.mast import Catalogs
+from astroquery.mast import Catalogs
 import astropy.units as u
 from astropy.coordinates import SkyCoord
 from reproject.mosaicking import find_optimal_celestial_wcs
@@ -144,7 +142,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
                 if nanValues < totValues * 0.5:
                     wcs, shape = find_optimal_celestial_wcs([hdu])
-                    data, _ = reproject_interp(hdu, wcs, shape_out=shape)
+                    # data, _ = reproject_interp(hdu, wcs, shape_out=shape)
                     position = SkyCoord(ra*u.deg, dec*u.deg)
                     cutout = Cutout2D(data, position, img_size*u.arcsec, wcs=wcs, mode='partial')
                     data = cutout.data
@@ -190,24 +188,24 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 x = image_bucket.x
                 y = image_bucket.y
                 band = image_bucket.band
-                year_obs = int(round(image_bucket.year_obs, 0))
-                wcs = image_bucket.wcs
+                # year_obs = int(round(image_bucket.year_obs, 0))
+                # wcs = image_bucket.wcs
                 overlay_ra = image_bucket.overlay_ra
                 overlay_dec = image_bucket.overlay_dec
                 overlay_phot = image_bucket.overlay_phot
 
-                ax = fig.add_subplot(rows, cols, img_idx, projection=wcs)
-                ax.plot(x, y, 'ro', fillstyle='none', markersize=9, markeredgewidth=0.3)
-                ax.plot(x, y, 'ro', fillstyle='none', markersize=0.3, markeredgewidth=0.3)
-                ax.text(0.03, 0.93, band, color='black', fontsize=3.0, transform=ax.transAxes,
+                ax = fig.add_subplot(rows, cols, img_idx)  # , projection=wcs)
+                ax.plot(x, y, 'ro', fillstyle='none', markersize=7, markeredgewidth=0.2)
+                ax.plot(x, y, 'ro', fillstyle='none', markersize=0.2, markeredgewidth=0.2)
+                ax.text(0.035, 0.90, band, color='black', fontsize=1.6, transform=ax.transAxes,
                         bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
-                ax.text(0.03, 0.04, year_obs, color='black', fontsize=3.0, transform=ax.transAxes,
+                ax.text(0.035, 0.05, image_bucket.year_obs, color='black', fontsize=1.6, transform=ax.transAxes,
                         bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
                 ax.add_patch(Rectangle((0, 0), 1, 1, fill=False, lw=0.2, ec='black', transform=ax.transAxes))
 
                 if overlays and overlay_ra is not None and overlay_dec is not None and overlay_phot is not None:
-                    ax.scatter(overlay_ra, overlay_dec, transform=ax.get_transform('icrs'), s=0/overlay_phot + 2.0,
-                               edgecolor=overlay_color, facecolor='none', linewidths=0.3)
+                    ax.scatter(overlay_ra, overlay_dec, transform=ax.get_transform('icrs'), s=0/overlay_phot + 1.0,
+                               edgecolor=overlay_color, facecolor='none', linewidths=0.2)
 
                 vmin, vmax = get_min_max(data)
                 ax.imshow(data, vmin=vmin, vmax=vmax, cmap='gray_r')
@@ -311,24 +309,6 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 print(traceback.format_exc())
                 return None
 
-        def search_panstarrs(ra, dec, radius):
-            url = 'https://catalogs.mast.stsci.edu/api/v0.1/panstarrs/dr2/mean.votable'
-            params = {
-                'ra': ra,
-                'dec': dec,
-                'radius': radius.to(u.deg).value,
-                'nStackDetections.gte': 2,
-                'columns': ['raMean', 'decMean', 'gMeanPSFMag', 'rMeanPSFMag', 'iMeanPSFMag', 'zMeanPSFMag', 'yMeanPSFMag', 'distance'],
-                'sort_by': ['distance']
-            }
-            response = requests.get(url, params=params)
-            table = Table.read(BytesIO(response.content), format='votable')
-            if len(table) > 0:
-                table = table.filled(np.nan)
-                return table
-            else:
-                return None
-
         def get_year_obs(hdu, date_obs_key, date_pattern):
             header = hdu.header
             # print(header)
@@ -341,6 +321,17 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 time = datetime.strptime(date_obs[0:size], date_pattern)
                 year = time.year
             return year
+
+        def get_date_obs(hdu, date_obs_key, date_pattern):
+            header = hdu.header
+            time_obs = header[date_obs_key]
+            if date_pattern == 'MJD':
+                date_obs = Time(time_obs, scale='utc', format='mjd', out_subfmt='date').iso
+            else:
+                date_len = len(time_obs)
+                size = date_len if date_len < 10 else 10
+                date_obs = datetime.strptime(time_obs[0:size], date_pattern).date()
+            return date_obs
 
         def get_year_from_mjd(mjd):
             time = Time(mjd, scale='utc', format='mjd')
@@ -369,8 +360,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         # Code for finder_charts function
         # -------------------------------
         fig = plt.figure()
-        fig.set_figheight(15)
-        fig.set_figwidth(15)
+        fig.set_figheight(10)
+        fig.set_figwidth(10)
 
         coords = SkyCoord(ra*u.deg, dec*u.deg)
         radius = (img_size*math.sqrt(2)/2)*u.arcsec
@@ -810,18 +801,18 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     print('A problem occurred while downloading VVV catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
-            frame_type = 'deep_stack'
+            frame_type = 'stack'
             images = get_VSA_image(ra, dec, 'Z', img_size, database, frame_type)
             if images:
                 data, x, y, wcs = process_image_data(images[0][1])
-                survey.append(ImageBucket(data, x, y, 'VVV Z', get_year_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op1))
+                survey.append(ImageBucket(data, x, y, 'VVV Z', get_date_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op1))
             else:
                 survey.append(None)
 
             images = get_VSA_image(ra, dec, 'Y', img_size, database, frame_type)
             if images:
                 data, x, y, wcs = process_image_data(images[0][1])
-                survey.append(ImageBucket(data, x, y, 'VVV Y', get_year_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op2))
+                survey.append(ImageBucket(data, x, y, 'VVV Y', get_date_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op2))
             else:
                 survey.append(None)
 
@@ -829,7 +820,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             if images:
                 year_b = get_year_obs(images[0][1], date_obs_key, date_pattern)
                 b, x, y, wcs = process_image_data(images[0][1])
-                survey.append(ImageBucket(b, x, y, 'VVV J', year_b, wcs, overlay_ra, overlay_dec, op3))
+                survey.append(ImageBucket(b, x, y, 'VVV J', get_date_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op3))
             else:
                 survey.append(None)
 
@@ -837,15 +828,16 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             if images:
                 year_g = get_year_obs(images[0][1], date_obs_key, date_pattern)
                 g, x, y, wcs = process_image_data(images[0][1])
-                survey.append(ImageBucket(g, x, y, 'VVV H', year_g, wcs, overlay_ra, overlay_dec, op4))
+                survey.append(ImageBucket(g, x, y, 'VVV H', get_date_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op4))
             else:
                 survey.append(None)
 
             images = get_VSA_image(ra, dec, 'Ks', img_size, database, frame_type)
             if images:
-                year_r = get_year_obs(images[0][1], date_obs_key, date_pattern)
-                r, x, y, wcs = process_image_data(images[0][1])
-                survey.append(ImageBucket(r, x, y, 'VVV K', year_r, wcs, overlay_ra, overlay_dec, op5))
+                for i in range(0, len(images)):
+                    year_r = get_year_obs(images[i][1], date_obs_key, date_pattern)
+                    r, x, y, wcs = process_image_data(images[i][1])
+                    survey.append(ImageBucket(r, x, y, 'VVV K ' + str(i+1), get_date_obs(images[i][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op5))
             else:
                 survey.append(None)
 
@@ -979,9 +971,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 if images:
                     if overlays or save_result_tables:
                         try:
-                            # table = Catalogs.query_region(coords, radius=radius, catalog='Panstarrs', data_release='dr2', table='mean',
-                            #                               nStackDetections=[('gte', 2)], sort_by=[('asc', 'distance')])
-                            table = search_panstarrs(ra, dec, radius)
+                            table = Catalogs.query_region(coords, radius=radius, catalog='Panstarrs', data_release='dr2', table='mean',
+                                                          nStackDetections=[('gte', 2)], sort_by=[('asc', 'distance')])
                             if table:
                                 overlay_ra = table['raMean']
                                 overlay_dec = table['decMean']
@@ -995,38 +986,23 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                             print('A problem occurred while downloading Pan-STARRS catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                             print(traceback.format_exc())
 
-                    if 'g' in images:
-                        year_b = get_year_obs(images['g'][0], date_obs_key, date_pattern)
-                        b, x, y, wcs = process_image_data(images['g'][0])
-                        survey.append(ImageBucket(b, x, y, 'PS1 g', year_b, wcs, overlay_ra, overlay_dec, op1))
-                    else:
-                        survey.append(None)
+                    year_b = get_year_obs(images['g'][0], date_obs_key, date_pattern)
+                    b, x, y, wcs = process_image_data(images['g'][0])
+                    survey.append(ImageBucket(b, x, y, 'PS1 g', year_b, wcs, overlay_ra, overlay_dec, op1))
 
-                    if 'r' in images:
-                        data, x, y, wcs = process_image_data(images['r'][0])
-                        survey.append(ImageBucket(data, x, y, 'PS1 r', get_year_obs(images['r'][0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op2))
-                    else:
-                        survey.append(None)
+                    data, x, y, wcs = process_image_data(images['r'][0])
+                    survey.append(ImageBucket(data, x, y, 'PS1 r', get_year_obs(images['r'][0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op2))
 
-                    if 'i' in images:
-                        year_g = get_year_obs(images['i'][0], date_obs_key, date_pattern)
-                        g, x, y, wcs = process_image_data(images['i'][0])
-                        survey.append(ImageBucket(g, x, y, 'PS1 i', year_g, wcs, overlay_ra, overlay_dec, op3))
-                    else:
-                        survey.append(None)
+                    year_g = get_year_obs(images['i'][0], date_obs_key, date_pattern)
+                    g, x, y, wcs = process_image_data(images['i'][0])
+                    survey.append(ImageBucket(g, x, y, 'PS1 i', year_g, wcs, overlay_ra, overlay_dec, op3))
 
-                    if 'z' in images:
-                        data, x, y, wcs = process_image_data(images['z'][0])
-                        survey.append(ImageBucket(data, x, y, 'PS1 z', get_year_obs(images['z'][0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op4))
-                    else:
-                        survey.append(None)
+                    data, x, y, wcs = process_image_data(images['z'][0])
+                    survey.append(ImageBucket(data, x, y, 'PS1 z', get_year_obs(images['z'][0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op4))
 
-                    if 'y' in images:
-                        year_r = get_year_obs(images['y'][0], date_obs_key, date_pattern)
-                        r, x, y, wcs = process_image_data(images['y'][0])
-                        survey.append(ImageBucket(r, x, y, 'PS1 y', year_r, wcs, overlay_ra, overlay_dec, op5))
-                    else:
-                        survey.append(None)
+                    year_r = get_year_obs(images['y'][0], date_obs_key, date_pattern)
+                    r, x, y, wcs = process_image_data(images['y'][0])
+                    survey.append(ImageBucket(r, x, y, 'PS1 y', year_r, wcs, overlay_ra, overlay_dec, op5))
 
                     if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
                         mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
@@ -1186,8 +1162,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         # Plot image series
         if chrono_order:
             surveys.sort(key=lambda x: x[0])  # sort by mean observation year
-        cols = 6
-        rows = 14
+        cols = 10
+        rows = 30
         img_idx = 0
         info_idx = 0
         for survey in surveys:
@@ -1208,7 +1184,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         if object_info:
             # Info text
-            fontsize = 5.0
+            fontsize = 2.0
             ax = fig.add_subplot(rows, cols, info_idx)
             ax.text(0.05, 0.70, r'$\alpha$ = ' + str(round(coords.ra.value, 6)), fontsize=fontsize, transform=ax.transAxes)
             ax.text(0.05, 0.55, r'$\delta$ = ' + str(round(coords.dec.value, 6)), fontsize=fontsize, transform=ax.transAxes)
@@ -1229,7 +1205,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         # Save and open the PDF file
         filename = 'Finder_charts_' + create_obj_name(ra, dec) + '.' + file_format
-        plt.subplots_adjust(wspace=0, hspace=0.05, right=0.44)
+        plt.subplots_adjust(wspace=0, hspace=0.05, right=0.5)
         plt.savefig(filename, dpi=600, bbox_inches='tight', format=file_format)
         plt.close()
 
