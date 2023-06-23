@@ -10,7 +10,7 @@
 - Spitzer (IRAC1, IRAC2, IRAC3, IRAC4, MIPS24),
 - WISE (W1, W2, W3, W4),
 - UKIDSS (Y, J, H, K),
-- UHS (J),
+- UHS (J, K),
 - VHS (Y, J, H, K),
 - VVV (Z, Y, J, H, K),
 - VIKING (Z, Y, J, H, K),
@@ -64,6 +64,7 @@ python setup.py install
 - ```spitzer``` : whether to create Spitzer image series (type: bool, default: True)
 - ```wise``` : whether to create WISE image series (type: bool, default: True)
 - ```ukidss``` : whether to create UKIDSS image series (type: bool, default: True)
+- ```uhs``` : whether to create UHS image series (type: bool, default: True)
 - ```vhs``` : whether to create VHS image series (type: bool, default: True)
 - ```vvv``` : whether to create VVV image series (type: bool, default: True)
 - ```viking``` : whether to create VIKING image series (type: bool, default: True)

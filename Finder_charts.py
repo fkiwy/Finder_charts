@@ -33,9 +33,9 @@ from pyvo.dal import sia
 
 
 def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='red', dss=True, twomass=True, spitzer=True, wise=True,
-                         ukidss=True, vhs=True, vvv=True, viking=True, ps1=True, decam=True, neowise=True, neowise_contrast=3, chrono_order=True,
-                         object_info=True,  directory=tempfile.gettempdir(), cache=True, show_progress=True, timeout=300, open_pdf=None, open_file=True,
-                         file_format='pdf', save_result_tables=False, result_tables_format='ipac', result_tables_extension='dat'):
+                         ukidss=True, uhs=True, vhs=True, vvv=True, viking=True, ps1=True, decam=True, neowise=True, neowise_contrast=3,
+                         chrono_order=True, object_info=True, directory=tempfile.gettempdir(), cache=True, show_progress=True, timeout=300, open_pdf=None,
+                         open_file=True, file_format='pdf', save_result_tables=False, result_tables_format='ipac', result_tables_extension='dat'):
     """
     Creates multi-bands finder charts from image data of following sky surveys:
     - DSS (DSS1 B, DSS1 R, DSS2 B, DSS2 R, DSS2 IR),
@@ -43,7 +43,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
     - Spitzer (IRAC1, IRAC2, IRAC3, IRAC4, MIPS24),
     - WISE (W1, W2, W3, W4),
     - UKIDSS (Y, J, H, K),
-    - UHS (J),
+    - UHS (J, K),
     - VHS (Y, J, H, K),
     - VVV (Z, Y, J, H, K),
     - VIKING (Z, Y, J, H, K),
@@ -76,6 +76,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         Whether to create WISE image series. The default is True.
     ukidss : bool, optional
         Whether to create UKIDSS image series. The default is True.
+    uhs : bool, optional
+        Whether to create UHS image series. The default is True.
     vhs : bool, optional
         Whether to create VHS image series. The default is True.
     vvv : bool, optional
@@ -694,18 +696,70 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.insert(0, None)
 
-            # UHS
-            images = get_UKIDSS_image(ra, dec, 'J', img_size, 'UHSDR1')
+            survey.insert(0, mean_obs_year)
+
+            survey.append(None)
+
+            surveys.append(survey)
+
+        # UHS
+        if uhs:
+            x = y = x_j = y_j = 0
+            r = g = b = None
+            mean_obs_year = 0
+            year_r = year_g = year_b = np.nan
+            overlay_ra = overlay_dec = op1 = op2 = op3 = op4 = op5 = None
+            date_obs_key = 'DATE-OBS'
+            date_pattern = '%Y-%m-%d'
+            survey = []
+
+            database = 'UHSDR2'
+            """ This is not working yet. Program id UHS is unknown.
+            if overlays or save_result_tables:
+                try:
+                    table = Ukidss.query_region(coords, radius, database=database, programme_id='LAS')  # programme_id='UHS'
+                    if table:
+                        table.sort('distance')
+                        table.pprint_all()
+                        overlay_ra = table['ra']
+                        overlay_dec = table['dec']
+                        op1 = table['jAperMag3']
+                        op2 = table['kAperMag3']
+                        save_catalog_search_results(table, 'UHS_DR2', ra, dec)
+                except Exception:
+                    print(table)
+                    print('A problem occurred while downloading UHS catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                    print(traceback.format_exc())
+            """
+            images = get_UKIDSS_image(ra, dec, 'J', img_size, database)
             if images:
-                obs_year = get_year_obs(images[0][0], date_obs_key, date_pattern)
-                data, x, y, wcs = process_image_data(images[0][1])
-                survey.append(ImageBucket(data, x, y, 'UHS J', get_year_obs(images[0][0], date_obs_key, date_pattern), wcs))
-                if mean_obs_year == 0:
-                    mean_obs_year = obs_year
+                year_b = get_year_obs(images[0][0], date_obs_key, date_pattern)
+                b, x_j, y_j, wcs = process_image_data(images[0][1])
+                survey.append(ImageBucket(b, x_j, y_j, 'UHS J', year_b, wcs, overlay_ra, overlay_dec, op2))
             else:
                 survey.append(None)
 
+            images = get_UKIDSS_image(ra, dec, 'K', img_size, database)
+            if images:
+                year_r = get_year_obs(images[0][0], date_obs_key, date_pattern)
+                r, x, y, wcs = process_image_data(images[0][1])
+                survey.append(ImageBucket(r, x, y, 'UHS K', year_r, wcs, overlay_ra, overlay_dec, op4))
+            else:
+                survey.append(None)
+
+            if np.isfinite(year_r) or np.isfinite(year_b):
+                year_g = (year_b + year_r) / 2
+                g = (b + r) / 2
+                mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
+                survey.insert(0, ImageBucket(create_color_image(r, g, b), x_j, y_j, 'UHS K-J', mean_obs_year, wcs))
+            else:
+                survey.insert(0, None)
+
             survey.insert(0, mean_obs_year)
+
+            survey.append(None)
+            survey.append(None)
+            survey.append(None)
 
             surveys.append(survey)
 
@@ -983,13 +1037,13 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                             #                               nStackDetections=[('gte', 2)], sort_by=[('asc', 'distance')])
                             table = search_panstarrs(ra, dec, radius)
                             if table:
-                                overlay_ra = table['raMean']
-                                overlay_dec = table['decMean']
-                                op1 = table['gMeanPSFMag']
-                                op2 = table['rMeanPSFMag']
-                                op3 = table['iMeanPSFMag']
-                                op4 = table['zMeanPSFMag']
-                                op5 = table['yMeanPSFMag']
+                                overlay_ra = table['raMean'][:, 0]
+                                overlay_dec = table['decMean'][:, 0]
+                                op1 = table['gMeanPSFMag'][:, 0]
+                                op2 = table['rMeanPSFMag'][:, 0]
+                                op3 = table['iMeanPSFMag'][:, 0]
+                                op4 = table['zMeanPSFMag'][:, 0]
+                                op5 = table['yMeanPSFMag'][:, 0]
                                 save_catalog_search_results(table, 'PS1_DR2', ra, dec)
                         except Exception:
                             print('A problem occurred while downloading Pan-STARRS catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
@@ -1187,7 +1241,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         if chrono_order:
             surveys.sort(key=lambda x: x[0])  # sort by mean observation year
         cols = 6
-        rows = 14
+        rows = 15
         img_idx = 0
         info_idx = 0
         for survey in surveys:
@@ -1229,7 +1283,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         # Save and open the PDF file
         filename = 'Finder_charts_' + create_obj_name(ra, dec) + '.' + file_format
-        plt.subplots_adjust(wspace=0, hspace=0.05, right=0.44)
+        plt.subplots_adjust(wspace=0, hspace=0.05, right=0.42)
         plt.savefig(filename, dpi=600, bbox_inches='tight', format=file_format)
         plt.close()
 
