@@ -1283,7 +1283,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         # Save and open the PDF file
         filename = 'Finder_charts_' + create_obj_name(ra, dec) + '.' + file_format
-        plt.subplots_adjust(wspace=0, hspace=0.05, right=0.42)
+        plt.subplots_adjust(wspace=0, hspace=0.05, right=0.43)
         plt.savefig(filename, dpi=600, bbox_inches='tight', format=file_format)
         plt.close()
 
