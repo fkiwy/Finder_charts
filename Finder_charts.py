@@ -748,10 +748,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 survey.append(None)
 
             if np.isfinite(year_r) or np.isfinite(year_b):
-                year_g = (year_b + year_r) / 2
-                g = (b + r) / 2
-                mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
-                survey.insert(0, ImageBucket(create_color_image(r, g, b), x_j, y_j, 'UHS K-J', mean_obs_year, wcs))
+                mean_obs_year = round(np.nanmean([year_r, year_b]), 1)
+                survey.insert(0, ImageBucket(create_color_image(r, (b+r)/2, b), x_j, y_j, 'UHS K-J', mean_obs_year, wcs))
             else:
                 survey.insert(0, None)
 
