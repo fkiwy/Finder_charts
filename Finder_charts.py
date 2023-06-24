@@ -24,6 +24,7 @@ from astropy.utils.data import download_file
 from astroquery.ukidss import Ukidss
 from astroquery.vsa import Vsa
 from astroquery.vizier import Vizier
+from astroquery.gaia import Gaia
 # from astroquery.mast import Catalogs
 import astropy.units as u
 from astropy.coordinates import SkyCoord
@@ -34,6 +35,7 @@ from pyvo.dal import sia
 
 def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='red', dss=True, twomass=True, spitzer=True, wise=True,
                          ukidss=True, uhs=True, vhs=True, vvv=True, viking=True, ps1=True, decam=True, neowise=True, neowise_contrast=3,
+                         gaia_entries=False, gaia_pm_vectors=False, gaia_pm_scale=0.5,
                          chrono_order=True, object_info=True, directory=tempfile.gettempdir(), cache=True, show_progress=True, timeout=300, open_pdf=None,
                          open_file=True, file_format='pdf', save_result_tables=False, result_tables_format='ipac', result_tables_extension='dat'):
     """
@@ -211,12 +213,47 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     ax.scatter(overlay_ra, overlay_dec, transform=ax.get_transform('icrs'), s=0/overlay_phot + 2.0,
                                edgecolor=overlay_color, facecolor='none', linewidths=0.3)
 
+                if gaia_entries:
+                    r = gaia_results
+                    ax.scatter(r['ra'], r['dec'], transform=ax.get_transform('icrs'), s=get_gaia_overlay_radius(r['parallax']),
+                               edgecolor='green', facecolor='none', linewidths=0.3)
+
+                if gaia_pm_vectors:
+                    r = gaia_results
+                    for ra, dec, pmra, pmdec in zip(r['ra'], r['dec'], r['pmra'], r['pmdec']):
+                        coords1, coords2 = apply_PM(ra, dec, pmra, pmdec)
+                        x1, y1 = wcs.world_to_pixel(coords1)
+                        x2, y2 = wcs.world_to_pixel(coords2)
+                        dx = x2 - x1
+                        dy = y2 - y1
+                        ax.quiver(x1, y1, dx, dy, color='r', angles='xy', scale_units='xy', scale=gaia_pm_scale, headwidth=10, headlength=10)
+
                 vmin, vmax = get_min_max(data)
                 ax.imshow(data, vmin=vmin, vmax=vmax, cmap='gray_r')
                 ax.axis('off')
             except Exception:
                 print('A problem occurred while plotting an image for object ra={ra}, dec={dec}, band={band}'.format(ra=ra, dec=dec, band=band))
                 print(traceback.format_exc())
+
+        def get_gaia_overlay_radius(plx):
+            minsize = 0.2
+            return np.log10(np.maximum(np.nan_to_num(np.array(plx)), 10**minsize))
+
+        def apply_PM(ra, dec, pmra, pmdec):
+            t1 = Time(2016.0, format='jyear')
+            t2 = Time(2026.0, format='jyear')
+
+            coords1 = SkyCoord(
+                ra=ra * u.deg,
+                dec=dec * u.deg,
+                pm_ra_cosdec=pmra * u.mas/u.yr,
+                pm_dec=pmdec * u.mas/u.yr,
+                obstime=t1,
+                frame='icrs'
+            )
+
+            coords2 = coords1.apply_space_motion(t2)
+            return coords1, coords2
 
         def create_lupton_rgb(data):
             vmin, vmax = get_min_max(data)
@@ -378,6 +415,11 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         radius = (img_size*math.sqrt(2)/2)*u.arcsec
 
         surveys = []
+
+        # Get Gaia catalog entries if requested
+        if gaia_entries or gaia_pm_vectors:
+            job = Gaia.cone_search_async(coords, radius.to(u.deg))
+            gaia_results = job.get_results()
 
         # DSS
         if dss:
