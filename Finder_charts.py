@@ -31,11 +31,18 @@ from astropy.coordinates import SkyCoord
 from reproject.mosaicking import find_optimal_celestial_wcs
 from reproject import reproject_interp
 from pyvo.dal import sia
+from enum import Enum
+
+
+class Crosshair(Enum):
+    CIRCLE_DOT = 1
+    MULTI_CIRCLES = 2
+    CROSS_NO_CENTER = 3
 
 
 def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='red', dss=True, twomass=True, spitzer=True, wise=True,
                          ukidss=True, uhs=True, vhs=True, vvv=True, viking=True, ps1=True, decam=True, neowise=True, neowise_contrast=3,
-                         gaia_entries=False, gaia_pm_vectors=False, gaia_pm_scale=0.5,
+                         gaia_entries=False, gaia_pm_vectors=False, gaia_pm_scale=0.5, targets=None, crosshair_type=Crosshair.CIRCLE_DOT,
                          chrono_order=True, object_info=True, directory=tempfile.gettempdir(), cache=True, show_progress=True, timeout=300, open_pdf=None,
                          open_file=True, file_format='pdf', save_result_tables=False, result_tables_format='ipac', result_tables_extension='dat'):
     """
@@ -201,8 +208,33 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 overlay_phot = image_bucket.overlay_phot
 
                 ax = fig.add_subplot(rows, cols, img_idx, projection=wcs)
-                ax.plot(x, y, 'ro', fillstyle='none', markersize=9, markeredgewidth=0.3)
-                ax.plot(x, y, 'ro', fillstyle='none', markersize=0.3, markeredgewidth=0.3)
+
+                if targets:
+                    for t in targets:
+                        ax.plot(t['ra'], t['dec'], 'o', color=t['color'], fillstyle='none', markersize=t['size'], markeredgewidth=0.4,
+                                transform=ax.get_transform('icrs'))
+                else:
+                    if crosshair_type == Crosshair.CIRCLE_DOT:
+                        mw = 0.4
+                        mc = 'r'
+                        ax.plot(x, y, 'o', fillstyle='none', markersize=9,  markeredgewidth=mw, color=mc)
+                        ax.plot(x, y, 'o', fillstyle='none', markersize=mw, markeredgewidth=mw, color=mc)
+                    if crosshair_type == Crosshair.MULTI_CIRCLES:
+                        mw = 0.4
+                        mc = 'r'
+                        ax.plot(x, y, 'o', fillstyle='none', markersize=9, markeredgewidth=mw, color=mc)
+                        ax.plot(x, y, 'o', fillstyle='none', markersize=6, markeredgewidth=mw, color=mc)
+                        ax.plot(x, y, 'o', fillstyle='none', markersize=3, markeredgewidth=mw, color=mc)
+                    if crosshair_type == Crosshair.CROSS_NO_CENTER:
+                        z = len(data)*0.03
+                        ms = 3
+                        mw = 0.4
+                        mc = 'r'
+                        ax.plot(x-z, y, marker=0, markersize=ms, markeredgewidth=mw, color=mc)
+                        ax.plot(x+z, y, marker=1, markersize=ms, markeredgewidth=mw, color=mc)
+                        ax.plot(x, y+z, marker=2, markersize=ms, markeredgewidth=mw, color=mc)
+                        ax.plot(x, y-z, marker=3, markersize=ms, markeredgewidth=mw, color=mc)
+
                 ax.text(0.03, 0.93, band, color='black', fontsize=3.0, transform=ax.transAxes,
                         bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
                 ax.text(0.03, 0.04, year_obs, color='black', fontsize=3.0, transform=ax.transAxes,
@@ -215,8 +247,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
                 if gaia_entries:
                     r = gaia_results
-                    ax.scatter(r['ra'], r['dec'], transform=ax.get_transform('icrs'), s=get_gaia_overlay_radius(r['parallax']),
-                               edgecolor='green', facecolor='none', linewidths=0.3)
+                    markersize = np.log10(np.maximum(r['parallax'], 3))
+                    ax.scatter(r['ra'], r['dec'], transform=ax.get_transform('icrs'), s=markersize, edgecolor='green', facecolor='none', linewidths=0.3)
 
                 if gaia_pm_vectors:
                     r = gaia_results
@@ -226,7 +258,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         x2, y2 = wcs.world_to_pixel(coords2)
                         dx = x2 - x1
                         dy = y2 - y1
-                        ax.quiver(x1, y1, dx, dy, color='r', angles='xy', scale_units='xy', scale=gaia_pm_scale, headwidth=10, headlength=10)
+                        ax.quiver(x1, y1, dx, dy, color='r', angles='xy', scale_units='xy', scale=gaia_pm_scale, headwidth=8, headlength=8)
 
                 vmin, vmax = get_min_max(data)
                 ax.imshow(data, vmin=vmin, vmax=vmax, cmap='gray_r')
@@ -234,10 +266,6 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             except Exception:
                 print('A problem occurred while plotting an image for object ra={ra}, dec={dec}, band={band}'.format(ra=ra, dec=dec, band=band))
                 print(traceback.format_exc())
-
-        def get_gaia_overlay_radius(plx):
-            minsize = 0.2
-            return np.log10(np.maximum(np.nan_to_num(np.array(plx)), 10**minsize))
 
         def apply_PM(ra, dec, pmra, pmdec):
             t1 = Time(2016.0, format='jyear')
