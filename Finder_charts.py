@@ -35,6 +35,7 @@ from enum import Enum
 
 
 class Crosshair(Enum):
+    NONE = 0
     CIRCLE_DOT = 1
     MULTI_CIRCLES = 2
     CROSS_NO_CENTER = 3
@@ -42,7 +43,7 @@ class Crosshair(Enum):
 
 def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='red', dss=True, twomass=True, spitzer=True, wise=True,
                          ukidss=True, uhs=True, vhs=True, vvv=True, viking=True, ps1=True, decam=True, neowise=True, neowise_contrast=3,
-                         gaia_entries=False, gaia_pm_vectors=False, gaia_pm_scale=0.5, targets=None, crosshair_type=Crosshair.CIRCLE_DOT,
+                         gaia_entries=False, gaia_pm_vectors=False, gaia_pm_scale=0.5, gaia_color='green', targets=None, crosshair_type=Crosshair.CIRCLE_DOT,
                          chrono_order=True, object_info=True, directory=tempfile.gettempdir(), cache=True, show_progress=True, timeout=300, open_pdf=None,
                          open_file=True, file_format='pdf', save_result_tables=False, result_tables_format='ipac', result_tables_extension='dat'):
     """
@@ -211,44 +212,40 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
                 if targets:
                     for t in targets:
-                        ax.plot(t['ra'], t['dec'], 'o', color=t['color'], fillstyle='none', markersize=t['size'], markeredgewidth=0.4,
-                                transform=ax.get_transform('icrs'))
-                else:
-                    if crosshair_type == Crosshair.CIRCLE_DOT:
-                        mw = 0.4
-                        mc = 'r'
-                        ax.plot(x, y, 'o', fillstyle='none', markersize=9,  markeredgewidth=mw, color=mc)
-                        ax.plot(x, y, 'o', fillstyle='none', markersize=mw, markeredgewidth=mw, color=mc)
-                    if crosshair_type == Crosshair.MULTI_CIRCLES:
-                        mw = 0.4
-                        mc = 'r'
-                        ax.plot(x, y, 'o', fillstyle='none', markersize=9, markeredgewidth=mw, color=mc)
-                        ax.plot(x, y, 'o', fillstyle='none', markersize=6, markeredgewidth=mw, color=mc)
-                        ax.plot(x, y, 'o', fillstyle='none', markersize=3, markeredgewidth=mw, color=mc)
-                    if crosshair_type == Crosshair.CROSS_NO_CENTER:
-                        z = len(data)*0.03
-                        ms = 3
-                        mw = 0.4
-                        mc = 'r'
-                        ax.plot(x-z, y, marker=0, markersize=ms, markeredgewidth=mw, color=mc)
-                        ax.plot(x+z, y, marker=1, markersize=ms, markeredgewidth=mw, color=mc)
-                        ax.plot(x, y+z, marker=2, markersize=ms, markeredgewidth=mw, color=mc)
-                        ax.plot(x, y-z, marker=3, markersize=ms, markeredgewidth=mw, color=mc)
+                        ra, dec, mc, ms = t['ra'], t['dec'], t['color'], t['size']
+                        if ra and dec and mc and ms:
+                            ax.plot(ra, dec, 'o', fillstyle='none', markersize=ms, markeredgewidth=0.3, color=mc,
+                                    transform=ax.get_transform('icrs'))
 
-                ax.text(0.03, 0.93, band, color='black', fontsize=3.0, transform=ax.transAxes,
-                        bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
-                ax.text(0.03, 0.04, year_obs, color='black', fontsize=3.0, transform=ax.transAxes,
-                        bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
-                ax.add_patch(Rectangle((0, 0), 1, 1, fill=False, lw=0.2, ec='black', transform=ax.transAxes))
+                if crosshair_type == Crosshair.CIRCLE_DOT:
+                    mw = 0.4
+                    mc = 'r'
+                    ax.plot(x, y, 'o', fillstyle='none', markersize=9,  markeredgewidth=mw, color=mc)
+                    ax.plot(x, y, 'o', fillstyle='none', markersize=mw, markeredgewidth=mw, color=mc)
+                if crosshair_type == Crosshair.MULTI_CIRCLES:
+                    mw = 0.4
+                    mc = 'r'
+                    ax.plot(x, y, 'o', fillstyle='none', markersize=9, markeredgewidth=mw, color=mc)
+                    ax.plot(x, y, 'o', fillstyle='none', markersize=6, markeredgewidth=mw, color=mc)
+                    ax.plot(x, y, 'o', fillstyle='none', markersize=3, markeredgewidth=mw, color=mc)
+                if crosshair_type == Crosshair.CROSS_NO_CENTER:
+                    z = len(data)*0.03
+                    ms = 3
+                    mw = 0.4
+                    mc = 'r'
+                    ax.plot(x-z, y, marker=0, markersize=ms, markeredgewidth=mw, color=mc)
+                    ax.plot(x+z, y, marker=1, markersize=ms, markeredgewidth=mw, color=mc)
+                    ax.plot(x, y+z, marker=2, markersize=ms, markeredgewidth=mw, color=mc)
+                    ax.plot(x, y-z, marker=3, markersize=ms, markeredgewidth=mw, color=mc)
 
                 if overlays and overlay_ra is not None and overlay_dec is not None and overlay_phot is not None:
                     ax.scatter(overlay_ra, overlay_dec, transform=ax.get_transform('icrs'), s=0/overlay_phot + 2.0,
-                               edgecolor=overlay_color, facecolor='none', linewidths=0.3)
+                               edgecolor=overlay_color, facecolor='none', linewidths=0.2)
 
                 if gaia_entries:
                     r = gaia_results
-                    markersize = np.log10(np.maximum(r['parallax'], 3))
-                    ax.scatter(r['ra'], r['dec'], transform=ax.get_transform('icrs'), s=markersize, edgecolor='green', facecolor='none', linewidths=0.3)
+                    ms = np.log10(np.maximum(r['parallax'], 3))
+                    ax.scatter(r['ra'], r['dec'], transform=ax.get_transform('icrs'), s=ms, edgecolor=gaia_color, facecolor='none', linewidths=0.2)
 
                 if gaia_pm_vectors:
                     r = gaia_results
@@ -258,7 +255,13 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         x2, y2 = wcs.world_to_pixel(coords2)
                         dx = x2 - x1
                         dy = y2 - y1
-                        ax.quiver(x1, y1, dx, dy, color='r', angles='xy', scale_units='xy', scale=gaia_pm_scale, headwidth=8, headlength=8)
+                        ax.quiver(x1, y1, dx, dy, angles='xy', scale_units='xy', headwidth=8, headlength=8, linewidths=0.2, scale=gaia_pm_scale, color=gaia_color)
+
+                ax.text(0.03, 0.93, band, color='black', fontsize=3.0, transform=ax.transAxes,
+                        bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
+                ax.text(0.03, 0.04, year_obs, color='black', fontsize=3.0, transform=ax.transAxes,
+                        bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
+                ax.add_patch(Rectangle((0, 0), 1, 1, fill=False, lw=0.2, ec='black', transform=ax.transAxes))
 
                 vmin, vmax = get_min_max(data)
                 ax.imshow(data, vmin=vmin, vmax=vmax, cmap='gray_r')
@@ -1329,25 +1332,50 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         info_idx += 1
 
         if object_info:
-            # Info text
-            fontsize = 5.0
-            ax = fig.add_subplot(rows, cols, info_idx)
-            ax.text(0.05, 0.70, r'$\alpha$ = ' + str(round(coords.ra.value, 6)), fontsize=fontsize, transform=ax.transAxes)
-            ax.text(0.05, 0.55, r'$\delta$ = ' + str(round(coords.dec.value, 6)), fontsize=fontsize, transform=ax.transAxes)
-            ax.text(0.05, 0.40, '$l$ = ' + str(round(coords.galactic.l.value, 6)), fontsize=fontsize, transform=ax.transAxes)
-            ax.text(0.05, 0.25, '$b$ = ' + str(round(coords.galactic.b.value, 6)), fontsize=fontsize, transform=ax.transAxes)
-            ax.axis('off')
+            if targets:
+                # Info text
+                fontsize = 5.0
+                ax = fig.add_subplot(rows, cols, info_idx)
+                ax.text(0.05, 0.82, r'$\alpha$ = ' + str(round(coords.ra.value, 6)), fontsize=fontsize, transform=ax.transAxes)
+                ax.text(0.05, 0.67, r'$\delta$ = ' + str(round(coords.dec.value, 6)), fontsize=fontsize, transform=ax.transAxes)
+                ax.text(0.05, 0.52, '$l$ = ' + str(round(coords.galactic.l.value, 6)), fontsize=fontsize, transform=ax.transAxes)
+                ax.text(0.05, 0.37, '$b$ = ' + str(round(coords.galactic.b.value, 6)), fontsize=fontsize, transform=ax.transAxes)
+                ax.text(0.05, 0.22, 'Size = ' + str(int(img_size)) + ' arcsec', fontsize=fontsize, transform=ax.transAxes)
+                ax.axis('off')
 
-            # Info text cont'd
-            hmsdms = coords.to_string('hmsdms', sep=':', precision=2)
-            hms = hmsdms[0:11]
-            dms = hmsdms[12:24] if dec < 0 else hmsdms[13:24]
-            ax = fig.add_subplot(rows, cols, info_idx + 1)
-            ax.text(0, 0.72, '(' + hms + ')', fontsize=fontsize, transform=ax.transAxes)
-            ax.text(0, 0.57, '(' + dms + ')', fontsize=fontsize, transform=ax.transAxes)
-            ax.text(0, 0.42, 'Size = ' + str(int(img_size)) + ' arcsec', fontsize=fontsize, transform=ax.transAxes)
-            ax.text(0, 0.27, 'North up, East left', fontsize=fontsize, transform=ax.transAxes)
-            ax.axis('off')
+                # Info text cont'd
+                text_y = 0.85
+                fontsize = 3.0
+                ax = fig.add_subplot(rows, cols, info_idx + 1)
+                for t in targets:
+                    catalog = t['catalog']
+                    epoch = t['epoch']
+                    color = t['color']
+                    if catalog:
+                        ax.text(0.05, text_y, catalog + ' ' + str(epoch), fontsize=fontsize, transform=ax.transAxes, color=color)
+                        text_y -= 0.1
+                    if text_y < 0:
+                        break
+                ax.axis('off')
+            else:
+                # Info text
+                fontsize = 5.0
+                ax = fig.add_subplot(rows, cols, info_idx)
+                ax.text(0.05, 0.70, r'$\alpha$ = ' + str(round(coords.ra.value, 6)), fontsize=fontsize, transform=ax.transAxes)
+                ax.text(0.05, 0.55, r'$\delta$ = ' + str(round(coords.dec.value, 6)), fontsize=fontsize, transform=ax.transAxes)
+                ax.text(0.05, 0.40, '$l$ = ' + str(round(coords.galactic.l.value, 6)), fontsize=fontsize, transform=ax.transAxes)
+                ax.text(0.05, 0.25, '$b$ = ' + str(round(coords.galactic.b.value, 6)), fontsize=fontsize, transform=ax.transAxes)
+                ax.axis('off')
+
+                # Info text cont'd
+                hmsdms = coords.to_string('hmsdms', sep=':', precision=2)
+                hms = hmsdms[0:11]
+                dms = hmsdms[12:24] if dec < 0 else hmsdms[13:24]
+                ax = fig.add_subplot(rows, cols, info_idx + 1)
+                ax.text(0, 0.70, '(' + hms + ')', fontsize=fontsize, transform=ax.transAxes)
+                ax.text(0, 0.55, '(' + dms + ')', fontsize=fontsize, transform=ax.transAxes)
+                ax.text(0, 0.40, 'Size = ' + str(int(img_size)) + ' arcsec', fontsize=fontsize, transform=ax.transAxes)
+                ax.axis('off')
 
         # Save and open the PDF file
         filename = 'Finder_charts_' + create_obj_name(ra, dec) + '.' + file_format
