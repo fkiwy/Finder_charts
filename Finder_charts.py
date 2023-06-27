@@ -1255,23 +1255,27 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         # Gaia G-band image
         if gaia_image:
             survey = []
-            b, gaia_wcs, obs_coords = create_gaia_finder_chart("", 2016.0, ra, dec, img_size=100, band='Bp')
+            gaia_epoch = 2016.0
+
+            b, gaia_wcs, obs_coords = create_gaia_finder_chart(ra, dec, size=img_size, band='Bp', epoch=gaia_epoch)
             x, y = gaia_wcs.world_to_pixel(obs_coords)
-            survey.append(ImageBucket(b, x, y, 'Gaia BP (simulated)', 2016.0, gaia_wcs))
+            survey.append(ImageBucket(b, x, y, 'Gaia BP (simulated)', gaia_epoch, gaia_wcs))
 
-            g, gaia_wcs, obs_coords = create_gaia_finder_chart("", 2016.0, ra, dec, img_size=100, band='G')
+            g, gaia_wcs, obs_coords = create_gaia_finder_chart(ra, dec, size=img_size, band='G', epoch=gaia_epoch)
             x, y = gaia_wcs.world_to_pixel(obs_coords)
-            survey.append(ImageBucket(g, x, y, 'Gaia G (simulated)', 2016.0, gaia_wcs))
+            survey.append(ImageBucket(g, x, y, 'Gaia G (simulated)', gaia_epoch, gaia_wcs))
 
-            r, gaia_wcs, obs_coords = create_gaia_finder_chart("", 2016.0, ra, dec, img_size=100, band='Rp')
+            r, gaia_wcs, obs_coords = create_gaia_finder_chart(ra, dec, size=img_size, band='Rp', epoch=gaia_epoch)
             x, y = gaia_wcs.world_to_pixel(obs_coords)
-            survey.append(ImageBucket(r, x, y, 'Gaia RP (simulated)', 2016.0, gaia_wcs))
+            survey.append(ImageBucket(r, x, y, 'Gaia RP (simulated)', gaia_epoch, gaia_wcs))
 
-            survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'Gaia RP-G-BP', 2016.0, gaia_wcs))
+            survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'Gaia RP-G-BP', gaia_epoch, gaia_wcs))
 
-            survey.insert(0, 2016)
+            survey.insert(0, gaia_epoch)
+
             survey.append(None)
             survey.append(None)
+
             surveys.append(survey)
 
         # WISE time series
