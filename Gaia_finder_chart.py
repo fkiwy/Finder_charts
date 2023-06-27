@@ -30,7 +30,7 @@ import tempfile
 
 
 def create_gaia_finder_chart(objname, epoch, ra, dec, pmra=0, pmde=0, plx=0, date=None, apero=False, simbad=False, directory=tempfile.gettempdir(),
-                             img_size=None):
+                             img_size=None, band='G'):
 
     class Namespace:
         def __init__(self, objname, epoch, ra, dec, pmra, pmde, plx, date, apero, simbad, directory):
@@ -884,6 +884,23 @@ def create_gaia_finder_chart(objname, epoch, ra, dec, pmra=0, pmde=0, plx=0, dat
             - PMDE: float, the proper motion in declination (mas/yr)
 
         """
+
+        if img_size:
+            # -------------------------------------------------------------------------
+            # seed Gaia images
+            # -------------------------------------------------------------------------
+            obs_coords, obs_time = propagate_coords(objdict, date)
+            gaia_sources = get_gaia_sources(obs_coords, obs_time,
+                                            radius=RADIUS['G'])
+            kwargs_gaia = dict(pixel_scale=PIXEL_SCALE['G'], obs_coords=obs_coords,
+                               fwhm=FWHM['G'], field_of_view=FIELD_OF_VIEW['G'],
+                               sigma_limit=SIGMA_LIMIT['G'], band=band,
+                               scale_factor=SCALE_FACTOR['G'])
+            print(f'\nSeeding Gaia {band}-band image')
+            image, wcs = seed_image(gaia_sources, flip_x=False, flip_y=False,
+                                    rotation=0 * uu.deg, **kwargs_gaia)
+            return image, wcs, obs_coords
+
         print(f'Propagating coords to {date.iso}')
         obs_coords, obs_time = propagate_coords(objdict, date)
         # -------------------------------------------------------------------------
@@ -910,14 +927,9 @@ def create_gaia_finder_chart(objname, epoch, ra, dec, pmra=0, pmde=0, plx=0, dat
                                   flip_x=FLIP_X['G'], flip_y=FLIP_Y['G'],
                                   rotation=TRANSFORM_ROTATE['G'].to(uu.deg),
                                   **kwargs_gaia)
-
         print('\nSeeding Gaia image (no rotation)')
         image3, wcs3 = seed_image(gaia_sources, flip_x=False, flip_y=False,
                                   rotation=0 * uu.deg, **kwargs_gaia)
-
-        if img_size:
-            return image3, wcs3, obs_coords
-
         # -------------------------------------------------------------------------
         # seed 2MASS images
         # -------------------------------------------------------------------------
@@ -930,11 +942,9 @@ def create_gaia_finder_chart(objname, epoch, ra, dec, pmra=0, pmde=0, plx=0, dat
                                   flip_x=FLIP_X['J'], flip_y=FLIP_Y['J'],
                                   rotation=TRANSFORM_ROTATE['J'].to(uu.deg),
                                   **kwargs_tmass)
-
         print('\nSeeding 2MASS image (no rotation)')
         image4, wcs4 = seed_image(gaia_sources, flip_x=False, flip_y=False,
                                   rotation=0 * uu.deg, **kwargs_tmass)
-
         # -------------------------------------------------------------------------
         # plot figures
         # -------------------------------------------------------------------------
@@ -952,7 +962,7 @@ def create_gaia_finder_chart(objname, epoch, ra, dec, pmra=0, pmde=0, plx=0, dat
         plot_map1(frame2, image2, wcs2, obs_coords,
                   '2MASS', FIELD_OF_VIEW['J'], PIXEL_SCALE['J'],
                   scale_factor=SCALE_FACTOR['J'])
-
+        # plot the gaia map
         # noinspection PyTypeChecker
         plot_map1(frame3, image3, wcs3, obs_coords,
                   'Gaia [No rotation]', FIELD_OF_VIEW['G'],
@@ -1036,13 +1046,15 @@ def create_gaia_finder_chart(objname, epoch, ra, dec, pmra=0, pmde=0, plx=0, dat
     # else we get the object dictionary from the cmd_args
     else:
         # print progress
-        print('\n' + '=' * 50)
-        print('Running NIRPS finder for object: {0}'.format(cmd_args.objname))
-        print('=' * 50 + '\n')
+        # print('\n' + '=' * 50)
+        # print('Running NIRPS finder for object: {0}'.format(cmd_args.objname))
+        # print('=' * 50 + '\n')
         # get stuff from command line
         _objdict = from_cmd_args(cmd_args)
         # run the main code
-        return main(cmd_args.objname, cmd_args.date, objdict=_objdict,
+        # return main(cmd_args.objname, cmd_args.date, objdict=_objdict,
+        #             directory=cmd_args.directory)
+        return main(cmd_args.objname, cmd_args.epoch, objdict=_objdict,
                     directory=cmd_args.directory)
 
     # =============================================================================

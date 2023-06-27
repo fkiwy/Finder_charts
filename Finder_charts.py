@@ -1255,12 +1255,23 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         # Gaia G-band image
         if gaia_image:
             survey = []
-            gaia_data, gaia_wcs, obs_coords = create_gaia_finder_chart("", 2016.0, ra, dec, img_size=100)
+            b, gaia_wcs, obs_coords = create_gaia_finder_chart("", 2016.0, ra, dec, img_size=100, band='Bp')
             x, y = gaia_wcs.world_to_pixel(obs_coords)
-            survey.append(ImageBucket(gaia_data, x, y, 'Gaia G (simulated)', 2016.0, gaia_wcs))
+            survey.append(ImageBucket(b, x, y, 'Gaia BP (simulated)', 2016.0, gaia_wcs))
+
+            g, gaia_wcs, obs_coords = create_gaia_finder_chart("", 2016.0, ra, dec, img_size=100, band='G')
+            x, y = gaia_wcs.world_to_pixel(obs_coords)
+            survey.append(ImageBucket(g, x, y, 'Gaia G (simulated)', 2016.0, gaia_wcs))
+
+            r, gaia_wcs, obs_coords = create_gaia_finder_chart("", 2016.0, ra, dec, img_size=100, band='Rp')
+            x, y = gaia_wcs.world_to_pixel(obs_coords)
+            survey.append(ImageBucket(r, x, y, 'Gaia RP (simulated)', 2016.0, gaia_wcs))
+
+            survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'Gaia RP-G-BP', 2016.0, gaia_wcs))
+
             survey.insert(0, 2016)
-            for _ in range(5):
-                survey.append(None)
+            survey.append(None)
+            survey.append(None)
             surveys.append(survey)
 
         # WISE time series
