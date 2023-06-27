@@ -12,37 +12,24 @@ from tqdm import tqdm
 
 def create_gaia_finder_chart(ra, dec, size=100, band='G', epoch=2016.0, pmra=0, pmdec=0, plx=0, date=None):
 
-    FIELD_OF_VIEW = dict()
-    FIELD_OF_VIEW['G'] = np.array([size, size]) * uu.arcsec
+    FIELD_OF_VIEW = np.array([size, size]) * uu.arcsec
 
-    SCALE_FACTOR = dict()
-    SCALE_FACTOR['G'] = np.array([1.0, 1.0])
+    SCALE_FACTOR = np.array([1.0, 1.0])
 
-    RADIUS = dict()
-    RADIUS['G'] = np.max(SCALE_FACTOR['G'] * FIELD_OF_VIEW['G'] / np.sqrt(2))
+    RADIUS = np.max(SCALE_FACTOR * FIELD_OF_VIEW / np.sqrt(2))
 
-    PIXEL_SCALE = dict()
-    PIXEL_SCALE['G'] = 0.1514 * uu.arcsec / uu.pixel
+    PIXEL_SCALE = 0.1514 * uu.arcsec / uu.pixel
 
-    TRANSFORM_ROTATE = dict()
-    TRANSFORM_ROTATE['G'] = 180 * uu.deg + 90 * uu.deg - 37.4 * uu.deg
+    FWHM = 2.0 * uu.arcsec
 
-    FWHM = dict()
-    FWHM['G'] = 2.0 * uu.arcsec
-
-    SIGMA_LIMIT = dict()
-    SIGMA_LIMIT['G'] = 25
+    SIGMA_LIMIT = 25
 
     MAX_PM = 11 * uu.arcsec / uu.year
 
-    FLIP_X = dict()
-    FLIP_X['G'] = True
-
-    FLIP_Y = dict()
-    FLIP_Y['G'] = False
-
     GAIA_EPOCH = 2016.0
+
     GAIA_URL = 'https://gea.esac.esa.int/tap-server/tap'
+
     GAIA_QUERY = """
     SELECT source_id,ra,dec,parallax,pmra,pmdec,phot_g_mean_mag,phot_rp_mean_mag,
            phot_bp_mean_mag, phot_g_mean_flux, phot_rp_mean_flux, phot_bp_mean_flux
@@ -253,11 +240,11 @@ def create_gaia_finder_chart(ra, dec, size=100, band='G', epoch=2016.0, pmra=0, 
     else:
         date = epoch
     obs_coords, obs_time = propagate_coords(ra, dec, pmra, pmdec, plx, epoch, date)
-    gaia_sources = get_gaia_sources(obs_coords, obs_time, radius=RADIUS['G'])
-    kwargs_gaia = dict(pixel_scale=PIXEL_SCALE['G'], obs_coords=obs_coords,
-                       fwhm=FWHM['G'], field_of_view=FIELD_OF_VIEW['G'],
-                       sigma_limit=SIGMA_LIMIT['G'], band=band,
-                       scale_factor=SCALE_FACTOR['G'])
+    gaia_sources = get_gaia_sources(obs_coords, obs_time, radius=RADIUS)
+    kwargs_gaia = dict(pixel_scale=PIXEL_SCALE, obs_coords=obs_coords,
+                       fwhm=FWHM, field_of_view=FIELD_OF_VIEW,
+                       sigma_limit=SIGMA_LIMIT, band=band,
+                       scale_factor=SCALE_FACTOR)
     print(f'Seeding Gaia {band}-band image')
     image, wcs = seed_image(gaia_sources, flip_x=False, flip_y=False,
                             rotation=0 * uu.deg, **kwargs_gaia)
