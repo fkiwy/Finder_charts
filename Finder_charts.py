@@ -8,6 +8,7 @@ import traceback
 import subprocess
 import collections
 import numpy as np
+from enum import Enum
 from io import BytesIO
 from datetime import datetime
 from PIL import Image, ImageOps
@@ -31,7 +32,7 @@ from astropy.coordinates import SkyCoord
 from reproject.mosaicking import find_optimal_celestial_wcs
 from reproject import reproject_interp
 from pyvo.dal import sia
-from enum import Enum
+from Gaia_finder_chart import create_gaia_finder_chart
 
 
 class Crosshair(Enum):
@@ -42,7 +43,7 @@ class Crosshair(Enum):
 
 
 def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='red', dss=True, twomass=True, spitzer=True, wise=True,
-                         ukidss=True, uhs=True, vhs=True, vvv=True, viking=True, ps1=True, decam=True, neowise=True, neowise_contrast=3,
+                         ukidss=True, uhs=True, vhs=True, vvv=True, viking=True, ps1=True, decam=True, neowise=True, neowise_contrast=3, gaia_image=True,
                          gaia_entries=False, gaia_pm_vectors=False, gaia_pm_scale=0.5, gaia_color='green', targets=None, crosshair_type=Crosshair.CIRCLE_DOT,
                          chrono_order=True, object_info=True, directory=tempfile.gettempdir(), cache=True, show_progress=True, timeout=300, open_pdf=None,
                          open_file=True, file_format='pdf', save_result_tables=False, result_tables_format='ipac', result_tables_extension='dat'):
@@ -1249,6 +1250,17 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
             survey.insert(0, mean_obs_year)
 
+            surveys.append(survey)
+
+        # Gaia G-band image
+        if gaia_image:
+            survey = []
+            gaia_data, gaia_wcs, obs_coords = create_gaia_finder_chart("", 2016.0, ra, dec, img_size=100)
+            x, y = gaia_wcs.world_to_pixel(obs_coords)
+            survey.append(ImageBucket(gaia_data, x, y, 'Gaia G (simulated)', 2016.0, gaia_wcs))
+            survey.insert(0, 2016)
+            for _ in range(5):
+                survey.append(None)
             surveys.append(survey)
 
         # WISE time series
