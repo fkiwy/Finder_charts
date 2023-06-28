@@ -41,10 +41,38 @@ class Crosshair(Enum):
     CROSS_NO_CENTER = 3
 
 
+class Survey(Enum):
+    NONE = 'NONE'
+    ALL = 'ALL'
+    DSS = 'DSS'
+    TWO_MASS = '2MASS'
+    SPITZER = 'IRAC'
+    ALLWISE = 'WISE'
+    UKIDSS = 'UKIDSS'
+    UHS = 'UHS'
+    VHS = 'VHS'
+    VVV = 'VVV'
+    VIKING = 'VIKING'
+    PS1 = 'PS1'
+    DECAM = 'DECam'
+    GAIA = 'Gaia'
+
+
+class Target:
+    def __init__(self, catalog, epoch, ra, dec, marker_size=3, marker_color='red', survey=Survey.NONE):
+        self.catalog = catalog
+        self.epoch = epoch
+        self.ra = ra
+        self.dec = dec
+        self.marker_size = marker_size
+        self.marker_color = marker_color
+        self.survey = survey
+
+
 def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='red', dss=True, twomass=True, spitzer=True, wise=True,
-                         ukidss=True, uhs=True, vhs=True, vvv=True, viking=True, ps1=True, decam=True, neowise=True, neowise_contrast=3, gaia_image=True,
-                         gaia_entries=False, gaia_pm_vectors=False, gaia_pm_scale=0.5, gaia_color='green', targets=None, crosshair_type=Crosshair.CIRCLE_DOT,
-                         pmra=None, pmdec=None, ref_epoch=None,
+                         ukidss=True, uhs=True, vhs=True, vvv=True, viking=True, ps1=True, decam=True, neowise=True, neowise_contrast=3,
+                         gaia_images=False, gaia_entries=False, gaia_pm_vectors=False, gaia_pm_years=10, gaia_color='green', targets=[],
+                         pmra=None, pmdec=None, ref_epoch=None, crosshair_type=Crosshair.CIRCLE_DOT,
                          chrono_order=True, object_info=True, directory=tempfile.gettempdir(), cache=True, show_progress=True, timeout=300,
                          open_file=True, file_format='pdf', save_result_tables=False, result_tables_format='ipac', result_tables_extension='dat'):
     """
@@ -164,12 +192,12 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     wcs = cutout.wcs
 
                     if None not in (pmra, pmdec, ref_epoch, date_obs_key, date_pattern):
-                        # Propagate crosshairs position
+                        # Propagate crosshair position
                         date_obs = get_date_obs(hdu2 if hdu2 else hdu, date_obs_key, date_pattern)
                         position = translate_position(ra, dec, pmra, pmdec, ref_epoch, date_obs)
 
                     if None not in (pmra, pmdec, ref_epoch, wise_epoch):
-                        # Propagate crosshairs position
+                        # Propagate crosshair position of WISE images
                         date_obs = Time(wise_epoch, format='jyear')
                         position = translate_position(ra, dec, pmra, pmdec, ref_epoch, date_obs)
 
@@ -222,10 +250,10 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
                 ax = fig.add_subplot(rows, cols, img_idx, projection=wcs)
 
-                if targets:
-                    for t in targets:
-                        ra, dec, mc, ms = t['ra'], t['dec'], t['color'], t['size']
-                        if ra and dec and mc and ms:
+                for t in targets:
+                    ra, dec, ms, mc, survey = t.ra, t.dec, t.marker_size, t.marker_color, t.survey
+                    if ra and dec and ms and mc:
+                        if survey == Survey.ALL or survey.value in band:
                             ax.plot(ra, dec, 'o', fillstyle='none', markersize=ms, markeredgewidth=0.3, color=mc,
                                     transform=ax.get_transform('icrs'))
 
@@ -267,7 +295,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         x2, y2 = wcs.world_to_pixel(coords2)
                         dx = x2 - x1
                         dy = y2 - y1
-                        ax.quiver(x1, y1, dx, dy, angles='xy', scale_units='xy', headwidth=8, headlength=8, linewidths=0.2, scale=gaia_pm_scale, color=gaia_color)
+                        ax.quiver(x1, y1, dx, dy, angles='xy', scale_units='xy', headwidth=8, headlength=8, linewidths=0.2, scale=1.0, color=gaia_color)
 
                 ax.text(0.03, 0.93, band, color='black', fontsize=3.0, transform=ax.transAxes,
                         bbox=dict(facecolor='white', alpha=0.5, linewidth=0.1, boxstyle=BoxStyle('Square', pad=0.3)))
@@ -283,8 +311,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 print(traceback.format_exc())
 
         def apply_PM(ra, dec, pmra, pmdec):
-            t1 = Time(2016.0, format='jyear')
-            t2 = Time(2026.0, format='jyear')
+            gaia_epoch = 2016.0
+            t1 = Time(gaia_epoch, format='jyear')
+            t2 = Time(gaia_epoch + gaia_pm_years, format='jyear')
             coords1 = SkyCoord(
                 ra=ra * u.deg,
                 dec=dec * u.deg,
@@ -626,7 +655,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             if image:
                 year_b = get_year_obs(image[0], date_obs_key, date_pattern)
                 b, x, y, wcs = process_image_data(image[0], date_obs_key, date_pattern)
-                survey.append(ImageBucket(b, x, y, 'IRAC1', year_b, wcs))
+                survey.append(ImageBucket(b, x, y, 'IRAC 1', year_b, wcs))
             else:
                 survey.append(None)
 
@@ -634,7 +663,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             if image:
                 year_g = get_year_obs(image[0], date_obs_key, date_pattern)
                 g, x, y, wcs = process_image_data(image[0], date_obs_key, date_pattern)
-                survey.append(ImageBucket(g, x, y, 'IRAC2', year_g, wcs))
+                survey.append(ImageBucket(g, x, y, 'IRAC 2', year_g, wcs))
             else:
                 survey.append(None)
 
@@ -642,27 +671,27 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             if image:
                 year_r = get_year_obs(image[0], date_obs_key, date_pattern)
                 r, x, y, wcs = process_image_data(image[0], date_obs_key, date_pattern)
-                survey.append(ImageBucket(r, x, y, 'IRAC3', year_r, wcs))
+                survey.append(ImageBucket(r, x, y, 'IRAC 3', year_r, wcs))
             else:
                 survey.append(None)
 
             image = get_IRSA_image(ra, dec, 'seip', 'seip_bands=spitzer.seip_science:IRAC4', img_size)
             if image:
                 data, x, y, wcs = process_image_data(image[0], date_obs_key, date_pattern)
-                survey.append(ImageBucket(data, x, y, 'IRAC4', get_year_obs(image[0], date_obs_key, date_pattern), wcs))
+                survey.append(ImageBucket(data, x, y, 'IRAC 4', get_year_obs(image[0], date_obs_key, date_pattern), wcs))
             else:
                 survey.append(None)
 
             image = get_IRSA_image(ra, dec, 'seip', 'seip_bands=spitzer.seip_science:MIPS24', img_size)
             if image:
                 data, x, y, wcs = process_image_data(image[0], date_obs_key, date_pattern)
-                survey.append(ImageBucket(data, x, y, 'MIPS24', get_year_obs(image[0], date_obs_key, date_pattern), wcs))
+                survey.append(ImageBucket(data, x, y, 'MIPS 24', get_year_obs(image[0], date_obs_key, date_pattern), wcs))
             else:
                 survey.append(None)
 
             if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
-                survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'IRAC3-2-1', mean_obs_year, wcs))
+                survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'IRAC 3-2-1', mean_obs_year, wcs))
             else:
                 survey.insert(0, None)
 
@@ -702,7 +731,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             if image:
                 year_b = get_year_obs(image[0], date_obs_key, date_pattern)
                 b, x, y, wcs = process_image_data(image[0], date_obs_key, date_pattern)
-                survey.append(ImageBucket(b, x, y, 'W1', year_b, wcs, overlay_ra, overlay_dec, op1))
+                survey.append(ImageBucket(b, x, y, 'WISE 1', year_b, wcs, overlay_ra, overlay_dec, op1))
             else:
                 survey.append(None)
 
@@ -710,7 +739,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             if image:
                 year_g = get_year_obs(image[0], date_obs_key, date_pattern)
                 g, x, y, wcs = process_image_data(image[0], date_obs_key, date_pattern)
-                survey.append(ImageBucket(g, x, y, 'W2', year_g, wcs, overlay_ra, overlay_dec, op2))
+                survey.append(ImageBucket(g, x, y, 'WISE 2', year_g, wcs, overlay_ra, overlay_dec, op2))
             else:
                 survey.append(None)
 
@@ -718,20 +747,20 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             if image:
                 year_r = get_year_obs(image[0], date_obs_key, date_pattern)
                 r, x, y, wcs = process_image_data(image[0], date_obs_key, date_pattern)
-                survey.append(ImageBucket(r, x, y, 'W3', year_r, wcs, overlay_ra, overlay_dec, op3))
+                survey.append(ImageBucket(r, x, y, 'WISE 3', year_r, wcs, overlay_ra, overlay_dec, op3))
             else:
                 survey.append(None)
 
             image = get_IRSA_image(ra, dec, 'wise', 'wise_bands=4', img_size)
             if image:
                 data, x, y, wcs = process_image_data(image[0], date_obs_key, date_pattern)
-                survey.append(ImageBucket(data, x, y, 'W4', get_year_obs(image[0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op4))
+                survey.append(ImageBucket(data, x, y, 'WISE 4', get_year_obs(image[0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op4))
             else:
                 survey.append(None)
 
             if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
-                survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'W3-W2-W1', mean_obs_year, wcs))
+                survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'WISE 3-2-1', mean_obs_year, wcs))
             else:
                 survey.insert(0, None)
 
@@ -1289,7 +1318,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             surveys.append(survey)
 
         # Gaia G-band image
-        if gaia_image:
+        if gaia_images:
             survey = []
             gaia_epoch = 2016.0
 
@@ -1396,50 +1425,31 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         info_idx += 1
 
         if object_info:
-            if targets:
-                # Info text
-                fontsize = 5.0
-                ax = fig.add_subplot(rows, cols, info_idx)
-                ax.text(0.05, 0.82, r'$\alpha$ = ' + str(round(coords.ra.value, 6)), fontsize=fontsize, transform=ax.transAxes)
-                ax.text(0.05, 0.67, r'$\delta$ = ' + str(round(coords.dec.value, 6)), fontsize=fontsize, transform=ax.transAxes)
-                ax.text(0.05, 0.52, '$l$ = ' + str(round(coords.galactic.l.value, 6)), fontsize=fontsize, transform=ax.transAxes)
-                ax.text(0.05, 0.37, '$b$ = ' + str(round(coords.galactic.b.value, 6)), fontsize=fontsize, transform=ax.transAxes)
-                ax.text(0.05, 0.22, 'Size = ' + str(int(img_size)) + ' arcsec', fontsize=fontsize, transform=ax.transAxes)
-                ax.axis('off')
+            # Info text
+            fontsize = 5.0
+            ax = fig.add_subplot(rows, cols, info_idx)
+            ax.text(0.05, 0.82, r'$\alpha$ = ' + str(round(coords.ra.value, 6)), fontsize=fontsize, transform=ax.transAxes)
+            ax.text(0.05, 0.67, r'$\delta$ = ' + str(round(coords.dec.value, 6)), fontsize=fontsize, transform=ax.transAxes)
+            ax.text(0.05, 0.52, '$l$ = ' + str(round(coords.galactic.l.value, 6)), fontsize=fontsize, transform=ax.transAxes)
+            ax.text(0.05, 0.37, '$b$ = ' + str(round(coords.galactic.b.value, 6)), fontsize=fontsize, transform=ax.transAxes)
+            ax.text(0.05, 0.22, 'Size = ' + str(int(img_size)) + ' arcsec', fontsize=fontsize, transform=ax.transAxes)
+            ax.axis('off')
 
-                # Info text cont'd
-                text_y = 0.85
-                fontsize = 3.0
-                ax = fig.add_subplot(rows, cols, info_idx + 1)
-                for t in targets:
-                    catalog = t['catalog']
-                    epoch = t['epoch']
-                    color = t['color']
-                    if catalog:
-                        ax.text(0.05, text_y, catalog + ' ' + str(epoch), fontsize=fontsize, transform=ax.transAxes, color=color)
-                        text_y -= 0.1
-                    if text_y < 0:
-                        break
-                ax.axis('off')
-            else:
-                # Info text
-                fontsize = 5.0
-                ax = fig.add_subplot(rows, cols, info_idx)
-                ax.text(0.05, 0.70, r'$\alpha$ = ' + str(round(coords.ra.value, 6)), fontsize=fontsize, transform=ax.transAxes)
-                ax.text(0.05, 0.55, r'$\delta$ = ' + str(round(coords.dec.value, 6)), fontsize=fontsize, transform=ax.transAxes)
-                ax.text(0.05, 0.40, '$l$ = ' + str(round(coords.galactic.l.value, 6)), fontsize=fontsize, transform=ax.transAxes)
-                ax.text(0.05, 0.25, '$b$ = ' + str(round(coords.galactic.b.value, 6)), fontsize=fontsize, transform=ax.transAxes)
-                ax.axis('off')
+            # Info text cont'd
+            text_y = 0.85
+            fontsize = 3.0
+            ax = fig.add_subplot(rows, cols, info_idx + 1)
+            ax.axis('off')
 
-                # Info text cont'd
-                hmsdms = coords.to_string('hmsdms', sep=':', precision=2)
-                hms = hmsdms[0:11]
-                dms = hmsdms[12:24] if dec < 0 else hmsdms[13:24]
-                ax = fig.add_subplot(rows, cols, info_idx + 1)
-                ax.text(0, 0.70, '(' + hms + ')', fontsize=fontsize, transform=ax.transAxes)
-                ax.text(0, 0.55, '(' + dms + ')', fontsize=fontsize, transform=ax.transAxes)
-                ax.text(0, 0.40, 'Size = ' + str(int(img_size)) + ' arcsec', fontsize=fontsize, transform=ax.transAxes)
-                ax.axis('off')
+            if gaia_entries:
+                targets.insert(0, Target(catalog='Gaia DR3 entries', epoch='', ra=None, dec=None, marker_size=None, marker_color=gaia_color, survey=Survey.ALL))
+
+            for t in targets:
+                if t.survey == Survey.ALL:
+                    ax.text(0.05, text_y, t.catalog + ' ' + str(t.epoch), fontsize=fontsize, transform=ax.transAxes, color=t.marker_color)
+                    text_y -= 0.1
+                if text_y < 0:
+                    break
 
         # Save and open the PDF file
         filename = 'Finder_charts_' + create_obj_name(ra, dec) + '.' + file_format
