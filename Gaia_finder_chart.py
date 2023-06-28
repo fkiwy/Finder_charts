@@ -37,7 +37,7 @@ def create_gaia_finder_chart(ra, dec, size=100, band='G', epoch=2016.0, pmra=0, 
     WHERE  1=CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', {ra}, {dec}, {radius}))
     """
 
-    def propagate_coords(ra, dec, pmra, pmdec, plx, epoch, obs_time: Time) -> Tuple[SkyCoord, Time]:
+    def propagate_coords(ra, dec, pmra, pmdec, plx, epoch, obs_time):
         # deal with distance
         if plx <= 0:
             distance = None
@@ -49,11 +49,10 @@ def create_gaia_finder_chart(ra, dec, size=100, band='G', epoch=2016.0, pmra=0, 
                           distance=distance,
                           pm_ra_cosdec=pmra * uu.mas / uu.yr,
                           pm_dec=pmdec * uu.mas / uu.yr,
-                          obstime=Time(epoch, format='jd'))
+                          obstime=epoch)
         # work out the delta time between epoch and J2000.0
         with warnings.catch_warnings(record=True) as _:
-            jepoch = Time(epoch, format='jd')
-            delta_time = (obs_time.jd - jepoch.jd) * uu.day
+            delta_time = (obs_time.jd - epoch.jd) * uu.day
         # get the coordinates
         with warnings.catch_warnings(record=True) as _:
             # center the image on the current coordinates
@@ -227,15 +226,9 @@ def create_gaia_finder_chart(ra, dec, size=100, band='G', epoch=2016.0, pmra=0, 
         image = np.arcsinh(image)
         return image, wcs
 
-    try:
-        epoch = Time(epoch, format='decimalyear')
-    except Exception:
-        raise ValueError(f'Cannot parse --epoch={epoch}')
+    epoch = Time(epoch, format='decimalyear')
     if date:
-        try:
-            date = Time(parse(str(date)))
-        except Exception:
-            raise ValueError(f'Cannot parse --date={date}')
+        date = Time(parse(str(date)))
     else:
         date = epoch
     obs_coords, obs_time = propagate_coords(ra, dec, pmra, pmdec, plx, epoch, date)
