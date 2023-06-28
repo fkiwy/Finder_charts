@@ -215,17 +215,16 @@ def create_gaia_finder_chart(ra, dec, size=100, band='G', epoch=2016.0, pmra=0, 
             # halo of PSF
             exp_halo = np.exp(-(xdiff ** 2 + ydiff ** 2) / (2 * (ew * 3) ** 2))
             image += nsig_psf[i] * exp_halo.value * 1e-3
-            # # spike in y
-            # exp_spike_y = np.exp(-np.abs(xdiff ** 2 + 0.1 * np.abs(ydiff) ** 2) / (2 * ew ** 2))
-            # image += nsig_psf[i] * exp_spike_y * 1e-2
-            # # spike in x
-            # exp_spike_x = np.exp(-(0.1 * np.abs(xdiff) ** 2 + np.abs(ydiff) ** 2) / (2 * ew ** 2))
-            # image += nsig_psf[i] * exp_spike_x * 1e-2
-
-        # display with an arcsinh stretch
+            """
+            # spike in y
+            exp_spike_y = np.exp(-np.abs(xdiff ** 2 + 0.1 * np.abs(ydiff) ** 2) / (2 * ew ** 2))
+            image += nsig_psf[i] * exp_spike_y.value * 1e-2
+            # spike in x
+            exp_spike_x = np.exp(-(0.1 * np.abs(xdiff) ** 2 + np.abs(ydiff) ** 2) / (2 * ew ** 2))
+            image += nsig_psf[i] * exp_spike_x.value * 1e-2
+            """
+        # apply an arcsinh stretch
         image = np.arcsinh(image)
-
-        # return the image and the wcs
         return image, wcs
 
     try:
@@ -241,11 +240,8 @@ def create_gaia_finder_chart(ra, dec, size=100, band='G', epoch=2016.0, pmra=0, 
         date = epoch
     obs_coords, obs_time = propagate_coords(ra, dec, pmra, pmdec, plx, epoch, date)
     gaia_sources = get_gaia_sources(obs_coords, obs_time, radius=RADIUS)
-    kwargs_gaia = dict(pixel_scale=PIXEL_SCALE, obs_coords=obs_coords,
-                       fwhm=FWHM, field_of_view=FIELD_OF_VIEW,
-                       sigma_limit=SIGMA_LIMIT, band=band,
-                       scale_factor=SCALE_FACTOR)
     print(f'Seeding Gaia {band}-band image')
-    image, wcs = seed_image(gaia_sources, flip_x=False, flip_y=False,
-                            rotation=0 * uu.deg, **kwargs_gaia)
+    image, wcs = seed_image(gaia_sources, flip_x=False, flip_y=False, rotation=0 * uu.deg, pixel_scale=PIXEL_SCALE,
+                            obs_coords=obs_coords, fwhm=FWHM, field_of_view=FIELD_OF_VIEW, sigma_limit=SIGMA_LIMIT,
+                            band=band, scale_factor=SCALE_FACTOR)
     return image, wcs, obs_coords
