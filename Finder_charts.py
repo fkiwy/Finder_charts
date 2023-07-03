@@ -178,12 +178,11 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
     def finder_charts(ra, dec, targets):
 
-        def process_image_data(hdu, date_obs_key=None, date_pattern=None, hdu2=None, wise_epoch=None):
+        def process_image_data(hdu, date_obs_key, date_pattern, hdu2=None):
             try:
                 data = hdu.data
                 nanValues = np.count_nonzero(np.isnan(data))
                 totValues = np.count_nonzero(data)
-                date_obs = None
 
                 if nanValues < totValues * 0.5:
                     wcs, shape = find_optimal_celestial_wcs([hdu])
@@ -193,20 +192,16 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     data = cutout.data
                     wcs = cutout.wcs
 
-                    if None not in (pmra, pmdec, ref_epoch, date_obs_key, date_pattern):
-                        # Propagate crosshair position
-                        date_obs = get_date_obs(hdu2 if hdu2 else hdu, date_obs_key, date_pattern)
-                        position = translate_position(ra, dec, pmra, pmdec, ref_epoch, date_obs)
+                    date_obs = get_date_obs(hdu2 if hdu2 else hdu, date_obs_key, date_pattern)
 
-                    if None not in (pmra, pmdec, ref_epoch, wise_epoch):
-                        # Propagate crosshair position of WISE images
-                        date_obs = Time(wise_epoch, format='jyear')
+                    if None not in (pmra, pmdec, ref_epoch):
+                        # Propagate crosshair position
                         position = translate_position(ra, dec, pmra, pmdec, ref_epoch, date_obs)
 
                     x, y = wcs.world_to_pixel(position)
                     return data, x, y, wcs, date_obs
                 else:
-                    return None, 0, 0, None, date_obs
+                    return None, 0, 0, None, None
             except Exception:
                 print('A problem occurred while creating an image for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                 print(traceback.format_exc())
@@ -1397,8 +1392,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             if imageW1 and imageW2:
                 hdu = imageW1[0]
                 header = hdu.header
-                meanmjd = (header['MJDMIN']+header['MJDMAX'])/2
-                prev_year = get_year_from_mjd(meanmjd)
+                mjdmean = (header['MJDMIN']+header['MJDMAX'])/2
+                header['MJDMEAN'] = mjdmean
+                prev_year = get_year_from_mjd(mjdmean)
                 dataW1 = hdu.data
                 dataW2 = imageW2[0].data
                 j = 1
@@ -1411,20 +1407,20 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         if not imageW1 and not imageW2:
                             break
                         hdu = imageW1[0]
-                        header = hdu.header
-                        meanmjd = (header['MJDMIN']+header['MJDMAX'])/2
-                        year = get_year_from_mjd(meanmjd)
+                        h = hdu.header
+                        mjdmean = (h['MJDMIN']+h['MJDMAX'])/2
+                        year = get_year_from_mjd(mjdmean)
                         if year == prev_year:
-                            dataW1 += hdu.data
-                            dataW2 += imageW2[0].data
                             j += 1
                         else:
                             hduW1 = fits.PrimaryHDU(data=dataW1/j, header=header)
                             hduW2 = fits.PrimaryHDU(data=dataW2/j, header=header)
                             images.append((hduW1, hduW2, prev_year))
-                            dataW1 = hdu.data
-                            dataW2 = imageW2[0].data
                             j = 1
+                        header = hdu.header
+                        header['MJDMEAN'] = mjdmean
+                        dataW1 = hdu.data
+                        dataW2 = imageW2[0].data
                         prev_year = year
                     except Exception:
                         print('A problem occurred while creating WISE time series for object ra={ra}, dec={dec}, epoch={epoch}'
@@ -1438,10 +1434,12 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 survey = []
 
                 for image in images:
-                    wise_epoch = image[2]
-                    w1, x, y, wcs, time_obs = process_image_data(image[0], wise_epoch=wise_epoch)
-                    w2, x, y, wcs, time_obs = process_image_data(image[1], wise_epoch=wise_epoch)
+                    date_obs_key = 'MJDMEAN'
+                    date_pattern = 'MJD'
+                    w1, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
+                    w2, x, y, wcs, time_obs = process_image_data(image[1], date_obs_key, date_pattern)
                     if w1 is not None and w2 is not None:
+                        wise_epoch = image[2]
                         survey.append(ImageBucket(create_color_image(w1, (w1+w2)/2, w2, neowise=True), x, y, 'W1-W2', wise_epoch, wcs, time_obs=time_obs))
 
                 survey.insert(0, 9999)
