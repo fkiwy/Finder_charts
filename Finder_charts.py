@@ -9,7 +9,6 @@ import subprocess
 import collections
 import numpy as np
 from enum import Enum
-from io import BytesIO
 from datetime import datetime
 from PIL import Image, ImageOps
 import matplotlib.pyplot as plt
@@ -19,7 +18,6 @@ from astropy.visualization import make_lupton_rgb
 from astropy.nddata import Cutout2D
 from astropy.io import fits
 from astropy.time import Time
-from astropy.table import Table
 from astropy.utils.data import download_file
 from astroquery.ukidss import Ukidss
 from astroquery.vsa import Vsa
@@ -196,7 +194,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
                     if None not in (pmra, pmdec, ref_epoch):
                         # Propagate crosshair position
-                        position = translate_position(ra, dec, pmra, pmdec, ref_epoch, date_obs)
+                        position = propagate_position(ra, dec, pmra, pmdec, ref_epoch, date_obs)
 
                     x, y = wcs.world_to_pixel(position)
                     return data, x, y, wcs, date_obs
@@ -307,7 +305,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         for result in gaia_results:
                             gaia_ra, gaia_dec = result['ra'], result['dec']
                             gaia_pmra, gaia_pmdec = result['pmra'], result['pmdec']
-                            gaia_position = translate_position(gaia_ra, gaia_dec, gaia_pmra, gaia_pmdec, date_ref, date_obs)
+                            gaia_position = propagate_position(gaia_ra, gaia_dec, gaia_pmra, gaia_pmdec, date_ref, date_obs)
                             gaia_overlay_ra.append(gaia_position.ra.value)
                             gaia_overlay_dec.append(gaia_position.dec.value)
                             gaia_overlay_pmra.append(gaia_pmra)
@@ -454,24 +452,27 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 return None
 
         def search_panstarrs(ra, dec, radius):
-            url = 'https://catalogs.mast.stsci.edu/api/v0.1/panstarrs/dr2/mean.votable'
-            params = {
+            query_url = 'https://catalogs.mast.stsci.edu/api/v0.1/panstarrs/dr2/mean.csv'
+            payload = {
                 'ra': ra,
                 'dec': dec,
                 'radius': radius.to(u.deg).value,
                 'nStackDetections.gte': 2,
-                'columns': ['raMean', 'decMean', 'gMeanPSFMag', 'rMeanPSFMag', 'iMeanPSFMag', 'zMeanPSFMag', 'yMeanPSFMag', 'distance'],
                 'sort_by': ['distance']
             }
-            response = requests.get(url, params=params, timeout=timeout)
-            table = Table.read(BytesIO(response.content), format='votable')
+            response = requests.get(query_url, params=payload, timeout=timeout)
+            table = ascii.read(response.text, format='csv')
             if len(table) > 0:
-                table = table.filled(np.nan)
                 return table
             else:
                 return None
 
-        def translate_position(ra, dec, pmra, pmdec, date_ref, date_obs):
+        def replace_table_values(table, value_to_replace, replacement):
+            for colname in table.colnames:
+                if table[colname].dtype.kind == 'f':
+                    table[colname][table[colname] == value_to_replace] = replacement
+
+        def propagate_position(ra, dec, pmra, pmdec, date_ref, date_obs):
             c = SkyCoord(
                 ra=ra * u.deg,
                 dec=dec * u.deg,
@@ -500,7 +501,6 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         def get_year_obs(hdu, date_obs_key, date_pattern):
             header = hdu.header
-            # print(header)
             if date_pattern == 'MJD':
                 year = get_year_from_mjd(header[date_obs_key])
             else:
@@ -524,8 +524,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         def save_catalog_search_results(result_table, survey, ra, dec):
             if save_result_tables:
-                file_name = 'Finder_charts_' + survey + '_results_' + create_obj_name(ra, dec) + '.' + result_tables_extension
-                result_table.write(file_name, format=result_tables_format, overwrite=True)
+                filename = 'Finder_charts_' + survey + '_results_' + create_obj_name(ra, dec) + '.' + result_tables_extension
+                filepath = os.path.join(directory, filename)
+                result_table.write(filepath, format=result_tables_format, overwrite=True)
 
         def start_file(filename):
             if sys.platform == 'win32':
@@ -829,6 +830,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 try:
                     table = Ukidss.query_region(coords, radius, database=database, programme_id='LAS')
                     if table:
+                        replace_table_values(table, -999999500.0, np.nan)
                         table.sort('distance')
                         overlay_ra = table['ra']
                         overlay_dec = table['dec']
@@ -901,6 +903,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 try:
                     table = Ukidss.query_region(coords, radius, database=database, programme_id='LAS')  # programme_id='UHS'
                     if table:
+                        replace_table_values(table, -999999500.0, np.nan)
                         table.sort('distance')
                         table.pprint_all()
                         overlay_ra = table['ra']
@@ -917,7 +920,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             if images:
                 year_b = get_year_obs(images[0][0], date_obs_key, date_pattern)
                 b, x_j, y_j, wcs_j, time_obs_j = process_image_data(images[0][1], date_obs_key, date_pattern, images[0][0])
-                survey.append(ImageBucket(b, x_j, y_j, 'UHS J', year_b, wcs_j, overlay_ra, overlay_dec, op2, time_obs=time_obs))
+                survey.append(ImageBucket(b, x_j, y_j, 'UHS J', year_b, wcs_j, overlay_ra, overlay_dec, op2, time_obs=time_obs_j))
             else:
                 survey.append(None)
 
@@ -959,6 +962,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 try:
                     table = Vsa.query_region(coords, radius, database=database, programme_id='VHS')
                     if table:
+                        replace_table_values(table, -999999500.0, np.nan)
                         table.sort('distance')
                         overlay_ra = table['ra']
                         overlay_dec = table['dec']
@@ -1031,6 +1035,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 try:
                     table = Vsa.query_region(coords, radius, database=database, programme_id='VVV')
                     if table:
+                        replace_table_values(table, -999999500.0, np.nan)
                         table.sort('distance')
                         overlay_ra = table['ra']
                         overlay_dec = table['dec']
@@ -1109,6 +1114,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 try:
                     table = Vsa.query_region(coords, radius, database=database, programme_id='VIKING')
                     if table:
+                        replace_table_values(table, -999999500.0, np.nan)
                         table.sort('distance')
                         overlay_ra = table['ra']
                         overlay_dec = table['dec']
@@ -1217,13 +1223,14 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                             #                               nStackDetections=[('gte', 2)], sort_by=[('asc', 'distance')])
                             table = search_panstarrs(ra, dec, radius)
                             if table:
-                                overlay_ra = table['raMean'][:, 0]
-                                overlay_dec = table['decMean'][:, 0]
-                                op1 = table['gMeanPSFMag'][:, 0]
-                                op2 = table['rMeanPSFMag'][:, 0]
-                                op3 = table['iMeanPSFMag'][:, 0]
-                                op4 = table['zMeanPSFMag'][:, 0]
-                                op5 = table['yMeanPSFMag'][:, 0]
+                                replace_table_values(table, -999.0, np.nan)
+                                overlay_ra = table['raMean']
+                                overlay_dec = table['decMean']
+                                op1 = table['gMeanPSFMag']
+                                op2 = table['rMeanPSFMag']
+                                op3 = table['iMeanPSFMag']
+                                op4 = table['zMeanPSFMag']
+                                op5 = table['yMeanPSFMag']
                                 save_catalog_search_results(table, 'PS1_DR2', ra, dec)
                         except Exception:
                             print('A problem occurred while downloading Pan-STARRS catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
@@ -1307,7 +1314,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         op3 = table['imag']
                         op4 = table['zmag']
                         op5 = table['Ymag']
-                        save_catalog_search_results(table, 'DES_DR1', ra, dec)
+                        save_catalog_search_results(table, 'DES_DR2', ra, dec)
                 except Exception:
                     print('A problem occurred while downloading DES catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
@@ -1360,7 +1367,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
             surveys.append(survey)
 
-        # Gaia G-band image
+        # Gaia simulated images
         if gaia_images:
             survey = []
 
@@ -1501,21 +1508,21 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 if text_y < 0:
                     break
 
-        # Save and open the PDF file
+        # Save the finder charts
         filename = 'Finder_charts_' + create_obj_name(ra, dec) + '.' + file_format
+        filepath = os.path.join(directory, filename)
         plt.subplots_adjust(wspace=0, hspace=0.05, right=0.43)
-        plt.savefig(filename, dpi=600, bbox_inches='tight', format=file_format)
+        plt.savefig(filepath, dpi=600, bbox_inches='tight', format=file_format)
         plt.close()
 
         if open_file:
-            start_file(filename)
+            start_file(filepath)
 
     # --------------------------------------
     # Code for create_finder_charts function
     # --------------------------------------
 
     warnings.simplefilter('ignore', category=Warning)
-    os.chdir(directory)
 
     if np.isscalar(ra) and np.isscalar(dec):
         finder_charts(ra, dec, targets)
