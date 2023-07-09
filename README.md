@@ -19,7 +19,7 @@
 
 It also creates a WISE time series of epochs 2010, (2013), and 2014-2021.
 
-All images are reprojected so that north is up and east is to the left.
+All images are reprojected so that north is up and east is to the left (except for some surveys at high declination).
 
 The ```create_finder_charts``` function only takes two mandatory arguments, RA and Dec in decimal degrees, which can be specified either as a scalar, Python sequence (list, tuple, ...), or Numpy array.
 
