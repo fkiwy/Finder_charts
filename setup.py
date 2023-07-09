@@ -8,4 +8,4 @@ setup(name='Finder_charts',
       author_email='frank.kiwy@outlook.com',
       license='MIT',
       py_modules=['Finder_charts', 'Gaia_finder_chart'],
-      install_requires=['numpy', 'matplotlib', 'pillow', 'requests', 'astropy', 'astroquery', 'reproject'])
+      install_requires=['numpy', 'matplotlib', 'pillow', 'requests', 'astropy', 'astroquery', 'reproject', 'tdqm'])
