@@ -232,9 +232,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 else:
                     xmax = max([r.shape[0], g.shape[0], b.shape[0]])
                     ymax = max([r.shape[1], g.shape[1], b.shape[1]])
-                    r = Image.fromarray(create_lupton_rgb(r)).convert('L').resize((xmax, ymax), Image.ANTIALIAS)
-                    g = Image.fromarray(create_lupton_rgb(g)).convert('L').resize((xmax, ymax), Image.ANTIALIAS)
-                    b = Image.fromarray(create_lupton_rgb(b)).convert('L').resize((xmax, ymax), Image.ANTIALIAS)
+                    r = Image.fromarray(create_lupton_rgb(r)).convert('L').resize((xmax, ymax), Image.LANCZOS)
+                    g = Image.fromarray(create_lupton_rgb(g)).convert('L').resize((xmax, ymax), Image.LANCZOS)
+                    b = Image.fromarray(create_lupton_rgb(b)).convert('L').resize((xmax, ymax), Image.LANCZOS)
                     image = Image.merge('RGB', (r, g, b))
 
                 return np.array(image)
