@@ -78,14 +78,14 @@ python setup.py install
 - ```gaia_pm_years``` : the number of years to scale the proper motion vectors (type: int, default: 10)
 - ```gaia_color``` : Gaia overlay color (type: str, default: 'green')
 - ```targets``` : a list of targets to be plotted on the specified image series (type: list of Finder_charts.Target objects, default: None)
-```
+```python
   targets = [
       Target(catalog='2MASS', epoch=2000.5, ra=0.123, dec=0.123, marker_size=10, marker_color='red', survey=Survey.TWO_MASS),
       Target(catalog='AllWISE', epoch=2010.6, ra=1.234, dec=1.234, marker_size=9, marker_color='blue', survey=Survey.ALLWISE),
       ...
   ]
 ```
-    where ``catalog`` is the catalog label and ``survey`` is of type Finder_charts.Survey
+where ``catalog`` is the catalog label and ``survey`` is of type Finder_charts.Survey
 - ```pmra``` : proper motion in RA (mas/yr) used to propagate the crosshair position to the image observation date (type: float, default: None)
 - ```pmdec``` : proper motion in declination (mas/yr) used to propagate the crosshair position to the image observation date (type: float, default: None)
 - ```ref_epoch``` :  epoch of ``ra`` and ``dec`` used to propagate the crosshair position to the image observation date (type: astropy.time.Time, default: None)
