@@ -77,7 +77,7 @@ python setup.py install
 - ```gaia_pm_vectors``` :  whether to plot Gaia porper motion vectors (type: bool, default: False)
 - ```gaia_pm_years``` : the number of years to scale the proper motion vectors (type: int, default: 10)
 - ```gaia_color``` : Gaia overlay color (type: str, default: 'green')
-- ```targets``` : a list of targets to be plotted on the specified image series (type: list of Finder_charts.Target objects, default: None)
+- ```targets``` : a list of targets to be plotted on the specified image series/survey (type: list of Finder_charts.Target objects, default: None)
 ```python
   targets = [
       Target(catalog='2MASS', epoch=2000.5, ra=0.123, dec=0.123, marker_size=10, marker_color='red', survey=Survey.TWO_MASS),
@@ -86,11 +86,11 @@ python setup.py install
   ]
 ```
 where ``catalog`` is the catalog label and ``survey`` is of type Finder_charts.Survey
-- ```pmra``` : proper motion in RA (mas/yr) used to propagate the crosshair position to the image observation date (type: float, default: None)
-- ```pmdec``` : proper motion in declination (mas/yr) used to propagate the crosshair position to the image observation date (type: float, default: None)
-- ```ref_epoch``` :  epoch of ``ra`` and ``dec`` used to propagate the crosshair position to the image observation date (type: astropy.time.Time, default: None)
+- ```pmra``` : proper motion in RA (mas/yr) used to propagate the crosshair position to the appropriate survey epoch (type: float, default: None)
+- ```pmdec``` : proper motion in declination (mas/yr) used to propagate the crosshair position to the appropriate survey epoch (type: float, default: None)
+- ```ref_epoch``` :  epoch of ``ra`` and ``dec`` used to propagate the crosshair position to the appropriate survey epoch (type: astropy.time.Time, default: None)
 - ```crosshair_type``` : the shape of the crosshair (type: Finder_charts.Crosshair, default: Crosshair.CIRCLE_DOT)
-- ```propagate_gaia_positions``` : whether to propagate the Gaia catalog positions to the image observation date (type: bool, default: False)
+- ```propagate_gaia_positions``` : whether to propagate the Gaia catalog positions to the appropriate survey epoch (type: bool, default: False)
 - ```chrono_order``` : whether to plot image series in chronological order (type: bool, default: True)
 - ```object_info``` : whether to plot object information like coordinates, etc. (type: bool, default: True)
 - ```directory``` : directory where the finder charts should be saved (type: str, default: tempfile.gettempdir())
@@ -111,8 +111,14 @@ where ``catalog`` is the catalog label and ``survey`` is of type Finder_charts.S
 
 Here's a more advanced example with propagated crosshairs and Gaia positions plus proper motion vectors:
 ```python
+from Finder_charts import create_finder_charts, Crosshair, Survey, Target
+from astropy.time import Time
+import tempfile
+
 ra, dec = 152.9226066, 28.7632385
 pmra, pmdec = -124.825, -713.244
+ref_epoch = Time(2016.0, format='jyear')
+
 create_finder_charts(ra, dec, img_size=100, overlays=True, overlay_color='red', dss=True, twomass=True, spitzer=True, wise=True,
                      ukidss=True, uhs=True, vhs=True, vvv=True, viking=True, ps1=True, decam=True, neowise=True, neowise_contrast=5,
                      gaia_images=True, gaia_entries=True, gaia_pm_vectors=True, gaia_pm_years=50, gaia_color='green', targets=None,
