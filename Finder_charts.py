@@ -129,6 +129,34 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         Whether to create WISE time series. The default is True.
     neowise_contrast : int, optional
         WISE time series contrast. The default is 3.
+    gaia_images : bool, optional
+        Whether to create simulated Gaia image series. The default is False.
+    gaia_entries : bool, optional
+        Whether to plot Gaia catalog overlays. The default is False.
+    gaia_pm_vectors : bool, optional
+        Whether to plot Gaia porper motion vectors. The default is False.
+    gaia_pm_years : int, optional
+        Number of years to scale the proper motion vectors. The default is 10.
+    gaia_color : str, optional
+        Gaia overlay color. The default is 'green'.
+    targets : list of Finder_charts.Target objects, optional
+        List of targets to be plotted on the specified image series/survey. The default is None.
+        Example:
+        targets = [
+            Target(catalog='2MASS', epoch=2000.5, ra=0.123, dec=0.123, marker_size=10, marker_color='red', survey=Survey.TWO_MASS),
+            Target(catalog='AllWISE', epoch=2010.6, ra=1.234, dec=1.234, marker_size=9, marker_color='blue', survey=Survey.ALLWISE),
+        ]
+        where ``catalog`` is the catalog label and ``survey`` is of type Finder_charts.Survey
+    pmra : float, optional
+        Proper motion in RA (mas/yr) used to propagate the crosshair position to the appropriate survey epoch. The default is None.
+    pmdec : float, optional
+        Proper motion in declination (mas/yr) used to propagate the crosshair position to the appropriate survey epoch. The default is None.
+    ref_epoch : astropy.time.Time, optional
+        Epoch of ``ra`` and ``dec`` used to propagate the crosshair position to the appropriate survey epoch. The default is None.
+    crosshair_type : Finder_charts.Crosshair, , optional
+        Shape of the crosshair. The default is Crosshair.CIRCLE_DOT
+    propagate_gaia_positions : bool, optional
+        Whether to propagate the Gaia catalog positions to the appropriate survey epoch. The default is False.
     chrono_order : bool, optional
         Whether to plot image series in chronological order. The default is True.
     object_info : bool, optional
