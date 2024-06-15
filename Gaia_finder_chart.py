@@ -153,7 +153,7 @@ def create_gaia_finder_chart(ra, dec, size=100, band='G', epoch=2016.0, pmra=0, 
             # work out the separation between this point and the center point
             separation = coords.separation(curr_coords)
             # add to sources
-            sources['gaia_id'].append(table_row['source_id'])
+            sources['gaia_id'].append(table_row['SOURCE_ID'])
             sources['ra'].append(curr_coords.ra.deg)
             sources['dec'].append(curr_coords.dec.deg)
             sources['G'].append(table_row['phot_g_mean_mag'])
