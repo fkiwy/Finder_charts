@@ -974,6 +974,13 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
             surveys.append(survey)
 
+        # Override deprecated VSA access URLs
+        BASE_URL = 'http://vsa.roe.ac.uk:8080/vdfs/'
+        Vsa.LOGIN_URL = BASE_URL + "DBLogin"
+        Vsa.IMAGE_URL = BASE_URL + "GetImage"
+        Vsa.ARCHIVE_URL = BASE_URL + "ImageList"
+        Vsa.REGION_URL = BASE_URL + "WSASQL"
+
         # VHS
         if vhs:
             x = y = x_j = y_j = 0
