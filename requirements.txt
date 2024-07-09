@@ -5,4 +5,4 @@ requests
 astropy
 astroquery
 reproject
-tdqm
+tqdm
