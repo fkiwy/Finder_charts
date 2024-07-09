@@ -43,7 +43,18 @@ This creates one file per catalog search results, e.g. Finder_charts_2MASS_resul
 ```
 
 ### Module dependencies:
-The Python Standard Library, NumPy, Matplotlib, Pillow (PIL Fork), Requests, Astropy, Astroquery and Reproject (the last two are Astropy affiliated packages)
+The Python Standard Library, numpy, matplotlib, pillow (PIL Fork), requests, astropy, astroquery, reproject and tqdm (the last two are Astropy affiliated packages)
+``Finder_charts`` has been developed with following dependency versions:
+```
+numpy==1.26.2
+matplotlib==3.8.0
+pillow==10.0.1
+requests==2.31.0
+astropy==5.3.4
+astroquery==0.4.7.dev9008
+reproject==0.13.0
+tqdm==4.65.0
+```
 
 ### Installation:
 The code can be installed as follows:
