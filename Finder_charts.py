@@ -290,10 +290,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
                 if targets:
                     for t in targets:
-                        ra, dec, ms, mc, survey = t.ra, t.dec, t.marker_size, t.marker_color, t.survey
-                        if ra and dec and ms and mc:
-                            if survey == Survey.ALL or survey.value in band:
-                                ax.plot(ra, dec, 'o', fillstyle='none', markersize=ms, markeredgewidth=0.3, color=mc,
+                        if t.ra and t.dec and t.marker_size and t.marker_color:
+                            if t.survey == Survey.ALL or t.survey.value in band:
+                                ax.plot(t.ra, t.dec, 'o', fillstyle='none', markersize=t.marker_size, markeredgewidth=0.3, color=t.marker_color,
                                         transform=ax.get_transform('icrs'))
 
                 if crosshair_type == Crosshair.CIRCLE_DOT:
@@ -349,8 +348,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     ax.scatter(gaia_overlay_ra, gaia_overlay_dec, transform=ax.get_transform('icrs'), s=ms, edgecolor=gaia_color, facecolor='none', linewidths=0.2)
 
                 if gaia_pm_vectors:
-                    for ra, dec, pmra, pmdec in zip(gaia_overlay_ra, gaia_overlay_dec, gaia_overlay_pmra, gaia_overlay_pmdec):
-                        coords1, coords2 = apply_PM(ra, dec, pmra, pmdec)
+                    for gaia_ra, gaia_dec, gaia_pmra, gaia_pmdec in zip(gaia_overlay_ra, gaia_overlay_dec, gaia_overlay_pmra, gaia_overlay_pmdec):
+                        coords1, coords2 = apply_PM(gaia_ra, gaia_dec, gaia_pmra, gaia_pmdec)
                         x1, y1 = wcs.world_to_pixel(coords1)
                         x2, y2 = wcs.world_to_pixel(coords2)
                         dx = x2 - x1
