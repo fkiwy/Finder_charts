@@ -586,7 +586,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         gaia_results = None
         if gaia_entries or gaia_pm_vectors:
             Gaia.ROW_LIMIT = row_limit
-            job = Gaia.cone_search_async(coords, radius.to(u.deg))
+            job = Gaia.cone_search_async(coords, radius=radius.to(u.deg))
             gaia_results = job.get_results()
 
         # DSS
