@@ -855,7 +855,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             database = 'UKIDSSDR11PLUS'
             if overlays or save_result_tables:
                 try:
-                    table = Ukidss.query_region(coords, radius, database=database, programme_id='LAS')
+                    table = Ukidss.query_region(coords, radius=radius, database=database, programme_id='LAS')
                     if table:
                         replace_table_values(table, -999999500.0, np.nan)
                         table.sort('distance')
@@ -994,7 +994,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             database = 'VHSDR6'
             if overlays or save_result_tables:
                 try:
-                    table = Vsa.query_region(coords, radius, database=database, programme_id='VHS')
+                    table = Vsa.query_region(coords, radius=radius, database=database, programme_id='VHS')
                     if table:
                         replace_table_values(table, -999999500.0, np.nan)
                         table.sort('distance')
@@ -1067,7 +1067,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             database = 'VVVDR5'
             if overlays or save_result_tables:
                 try:
-                    table = Vsa.query_region(coords, radius, database=database, programme_id='VVV')
+                    table = Vsa.query_region(coords, radius=radius, database=database, programme_id='VVV')
                     if table:
                         replace_table_values(table, -999999500.0, np.nan)
                         table.sort('distance')
@@ -1146,7 +1146,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             database = 'VIKINGDR5'
             if overlays or save_result_tables:
                 try:
-                    table = Vsa.query_region(coords, radius, database=database, programme_id='VIKING')
+                    table = Vsa.query_region(coords, radius=radius, database=database, programme_id='VIKING')
                     if table:
                         replace_table_values(table, -999999500.0, np.nan)
                         table.sort('distance')
@@ -1348,6 +1348,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         op3 = table['imag']
                         op4 = table['zmag']
                         op5 = table['Ymag']
+                        for col in table.colnames:
+                            if '/' in col:
+                                table.rename_column(col, col.replace('/', '_'))
                         save_catalog_search_results(table, 'DES_DR2', ra, dec)
                 except Exception:
                     print('A problem occurred while downloading DES catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
