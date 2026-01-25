@@ -1,34 +1,37 @@
-import os
-import sys
+import collections
 import math
-import warnings
-import requests
+import os
+import subprocess
+import sys
 import tempfile
 import traceback
-import subprocess
-import collections
-import numpy as np
-from enum import Enum
+import warnings
 from datetime import datetime
-from PIL import Image, ImageOps
-import matplotlib.pyplot as plt
-from matplotlib.patches import BoxStyle, Rectangle
-from astropy.io import ascii
-from astropy.visualization import make_lupton_rgb
-from astropy.nddata import Cutout2D
-from astropy.io import fits
-from astropy.time import Time
-from astropy.utils.data import download_file
-from astroquery.ukidss import Ukidss
-from astroquery.vsa import Vsa
-from astroquery.vizier import Vizier
-from astroquery.gaia import Gaia
+from enum import Enum
+
 # from astroquery.mast import Catalogs
 import astropy.units as u
+import matplotlib.pyplot as plt
+import numpy as np
+import requests
+from PIL import Image, ImageOps
 from astropy.coordinates import SkyCoord
-from reproject.mosaicking import find_optimal_celestial_wcs
-from reproject import reproject_interp
+from astropy.io import ascii
+from astropy.io import fits
+from astropy.nddata import Cutout2D
+from astropy.time import Time
+from astropy.utils.data import download_file
+from astropy.visualization import make_lupton_rgb
+from astroquery.gaia import Gaia
+from astroquery.ukidss import Ukidss
+from astroquery.vizier import Vizier
+from astroquery.vsa import Vsa
+from matplotlib.patches import BoxStyle, Rectangle
 from pyvo.dal import sia
+from reproject import reproject_interp
+from reproject.mosaicking import find_optimal_celestial_wcs
+
+import Uhs
 from Gaia_finder_chart import create_gaia_finder_chart
 
 
@@ -213,8 +216,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 if nanValues < totValues * 0.5:
                     wcs, shape = find_optimal_celestial_wcs([hdu])
                     data, _ = reproject_interp(hdu, wcs, shape_out=shape)
-                    position = SkyCoord(ra*u.deg, dec*u.deg)
-                    cutout = Cutout2D(data, position, img_size*u.arcsec, wcs=wcs, mode='partial')
+                    position = SkyCoord(ra * u.deg, dec * u.deg)
+                    cutout = Cutout2D(data, position, img_size * u.arcsec, wcs=wcs, mode='partial')
                     data = cutout.data
                     wcs = cutout.wcs
 
@@ -254,8 +257,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                             return None
 
                 if neowise:
-                    vmin, vmax = get_min_max(g, lo=neowise_contrast, hi=100-neowise_contrast)
-                    image = Image.fromarray(make_lupton_rgb(r, g, b, minimum=vmin, stretch=vmax-vmin, Q=0))
+                    vmin, vmax = get_min_max(g, lo=neowise_contrast, hi=100 - neowise_contrast)
+                    image = Image.fromarray(make_lupton_rgb(r, g, b, minimum=vmin, stretch=vmax - vmin, Q=0))
                     image = ImageOps.invert(image)
                 else:
                     xmax = max([r.shape[0], g.shape[0], b.shape[0]])
@@ -298,7 +301,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 if crosshair_type == Crosshair.CIRCLE_DOT:
                     mw = 0.4
                     mc = 'r'
-                    ax.plot(x, y, 'o', fillstyle='none', markersize=9,  markeredgewidth=mw, color=mc)
+                    ax.plot(x, y, 'o', fillstyle='none', markersize=9, markeredgewidth=mw, color=mc)
                     ax.plot(x, y, 'o', fillstyle='none', markersize=mw, markeredgewidth=mw, color=mc)
                 if crosshair_type == Crosshair.MULTI_CIRCLES:
                     mw = 0.4
@@ -307,17 +310,17 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     ax.plot(x, y, 'o', fillstyle='none', markersize=6, markeredgewidth=mw, color=mc)
                     ax.plot(x, y, 'o', fillstyle='none', markersize=3, markeredgewidth=mw, color=mc)
                 if crosshair_type == Crosshair.CROSS_NO_CENTER:
-                    z = len(data)*0.03
+                    z = len(data) * 0.03
                     ms = 3
                     mw = 0.4
                     mc = 'r'
-                    ax.plot(x-z, y, marker=0, markersize=ms, markeredgewidth=mw, color=mc)
-                    ax.plot(x+z, y, marker=1, markersize=ms, markeredgewidth=mw, color=mc)
-                    ax.plot(x, y+z, marker=2, markersize=ms, markeredgewidth=mw, color=mc)
-                    ax.plot(x, y-z, marker=3, markersize=ms, markeredgewidth=mw, color=mc)
+                    ax.plot(x - z, y, marker=0, markersize=ms, markeredgewidth=mw, color=mc)
+                    ax.plot(x + z, y, marker=1, markersize=ms, markeredgewidth=mw, color=mc)
+                    ax.plot(x, y + z, marker=2, markersize=ms, markeredgewidth=mw, color=mc)
+                    ax.plot(x, y - z, marker=3, markersize=ms, markeredgewidth=mw, color=mc)
 
                 if overlays and overlay_ra is not None and overlay_dec is not None and overlay_phot is not None:
-                    ax.scatter(overlay_ra, overlay_dec, transform=ax.get_transform('icrs'), s=0/overlay_phot + 1.5,
+                    ax.scatter(overlay_ra, overlay_dec, transform=ax.get_transform('icrs'), s=0 / overlay_phot + 1.5,
                                edgecolor=overlay_color, facecolor='none', linewidths=0.2)
 
                 gaia_overlay_ra = []
@@ -375,8 +378,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             coords1 = SkyCoord(
                 ra=ra * u.deg,
                 dec=dec * u.deg,
-                pm_ra_cosdec=pmra * u.mas/u.yr,
-                pm_dec=pmdec * u.mas/u.yr,
+                pm_ra_cosdec=pmra * u.mas / u.yr,
+                pm_dec=pmdec * u.mas / u.yr,
                 obstime=t1,
                 frame='icrs'
             )
@@ -385,7 +388,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         def create_lupton_rgb(data):
             vmin, vmax = get_min_max(data)
-            stretch = 1 if vmax-vmin == 0 else vmax-vmin
+            stretch = 1 if vmax - vmin == 0 else vmax - vmin
             return make_lupton_rgb(data, data, data, minimum=vmin, stretch=stretch, Q=0)
 
         def get_min_max(data, lo=10, hi=90):
@@ -398,7 +401,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         def get_neowise_image(ra, dec, epoch, band, size):
             download_url = 'http://byw.tools/cutout?ra={ra}&dec={dec}&size={size}&band={band}&epoch={epoch}'
-            download_url = download_url.format(ra=ra, dec=dec, size=round(size/2.75), band=band, epoch=epoch)
+            download_url = download_url.format(ra=ra, dec=dec, size=round(size / 2.75), band=band, epoch=epoch)
             try:
                 return fits.open(download_file(download_url, cache=cache, show_progress=show_progress, timeout=timeout))
             except Exception:
@@ -406,8 +409,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         def get_IRSA_image(ra, dec, survey, band, size):
             download_url = 'https://irsa.ipac.caltech.edu/applications/finderchart/servlet/api?mode=getImage&file_type=fits&reproject=false&' + \
-                'RA={ra}&DEC={dec}&subsetsize={size}&survey={survey}&{band}'
-            download_url = download_url.format(ra=ra, dec=dec, size=size/60, survey=survey, band=band)
+                           'RA={ra}&DEC={dec}&subsetsize={size}&survey={survey}&{band}'
+            download_url = download_url.format(ra=ra, dec=dec, size=size / 60, survey=survey, band=band)
             try:
                 return fits.open(download_file(download_url, cache=cache, show_progress=show_progress, timeout=timeout))
             except Exception:
@@ -435,9 +438,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             try:
                 fov = (size * u.arcsec).to(u.deg)
                 svc = sia.SIAService('https://datalab.noirlab.edu/sia/coadd_all')
-                result = svc.search((ra, dec), (fov/np.cos(dec*np.pi/180), fov), verbosity=2).to_table()
+                result = svc.search((ra, dec), (fov / np.cos(dec * np.pi / 180), fov), verbosity=2).to_table()
                 select = np.char.startswith(result['obs_bandpass'].astype(str), band) & (result['proctype'] == 'Stack') & \
-                    (result['prodtype'] == 'image') & (result['project_code'] == 'DES DR1')
+                         (result['prodtype'] == 'image') & (result['project_code'] == 'DES DR1')
                 table = result[select]
                 if len(table) > 0:
                     row = table[np.argmax(table['exptime'].data.data.astype('float'))]  # get image with longest exposure time
@@ -503,8 +506,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             c = SkyCoord(
                 ra=ra * u.deg,
                 dec=dec * u.deg,
-                pm_ra_cosdec=pmra * u.mas/u.yr,
-                pm_dec=pmdec * u.mas/u.yr,
+                pm_ra_cosdec=pmra * u.mas / u.yr,
+                pm_dec=pmdec * u.mas / u.yr,
                 obstime=date_ref,
                 frame='icrs'
             )
@@ -574,8 +577,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         fig.set_figheight(15)
         fig.set_figwidth(15)
 
-        coords = SkyCoord(ra*u.deg, dec*u.deg)
-        radius = (img_size*math.sqrt(2)/2)*u.arcsec
+        coords = SkyCoord(ra * u.deg, dec * u.deg)
+        radius = (img_size * math.sqrt(2) / 2) * u.arcsec
 
         surveys = []
 
@@ -924,30 +927,35 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             date_pattern = '%Y-%m-%d'
             survey = []
 
-            database = 'UHSDR2'
-            """ This is not working yet. Program id UHS is unknown.
+            database = 'UHSDR3'
             if overlays or save_result_tables:
                 try:
-                    table = Ukidss.query_region(coords, radius, database=database, programme_id='LAS')  # programme_id='UHS'
+                    table = Uhs.query_region(ra, dec, radius=radius.value, database="UHSDR3")
                     if table:
                         replace_table_values(table, -999999500.0, np.nan)
-                        table.sort('distance')
-                        table.pprint_all()
                         overlay_ra = table['ra']
                         overlay_dec = table['dec']
                         op1 = table['jAperMag3']
-                        op2 = table['kAperMag3']
-                        save_catalog_search_results(table, 'UHS_DR2', ra, dec)
+                        op2 = table['hAperMag3']
+                        op3 = table['kAperMag3']
+                        save_catalog_search_results(table, 'UHS_DR3', ra, dec)
                 except Exception:
-                    print(table)
                     print('A problem occurred while downloading UHS catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
-            """
+
             images = get_UKIDSS_image(ra, dec, 'J', img_size, database)
             if images:
                 year_b = get_year_obs(images[0][0], date_obs_key, date_pattern)
-                b, x_j, y_j, wcs_j, time_obs_j = process_image_data(images[0][1], date_obs_key, date_pattern, images[0][0])
-                survey.append(ImageBucket(b, x_j, y_j, 'UHS J', year_b, wcs_j, overlay_ra, overlay_dec, op2, time_obs=time_obs_j))
+                b, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern, images[0][0])
+                survey.append(ImageBucket(b, x, y, 'UHS J', year_b, wcs, overlay_ra, overlay_dec, op1, time_obs=time_obs))
+            else:
+                survey.append(None)
+
+            images = get_UKIDSS_image(ra, dec, 'H', img_size, database)
+            if images:
+                year_g = get_year_obs(images[0][0], date_obs_key, date_pattern)
+                g, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern, images[0][0])
+                survey.append(ImageBucket(g, x, y, 'UHS H', year_g, wcs, overlay_ra, overlay_dec, op2, time_obs=time_obs))
             else:
                 survey.append(None)
 
@@ -955,19 +963,18 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             if images:
                 year_r = get_year_obs(images[0][0], date_obs_key, date_pattern)
                 r, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern, images[0][0])
-                survey.append(ImageBucket(r, x, y, 'UHS K', year_r, wcs, overlay_ra, overlay_dec, op4, time_obs=time_obs))
+                survey.append(ImageBucket(r, x, y, 'UHS K', year_r, wcs, overlay_ra, overlay_dec, op3, time_obs=time_obs))
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) or np.isfinite(year_b):
-                mean_obs_year = round(np.nanmean([year_r, year_b]), 1)
-                survey.insert(0, ImageBucket(create_color_image(r, g, b), x_j, y_j, 'UHS K-J', mean_obs_year, wcs_j, time_obs=time_obs_j))
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+                mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
+                survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'UHS K-H-J', mean_obs_year, wcs, time_obs=time_obs))
             else:
                 survey.insert(0, None)
 
             survey.insert(0, mean_obs_year)
 
-            survey.append(None)
             survey.append(None)
             survey.append(None)
 
@@ -991,7 +998,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             date_pattern = '%Y-%m-%d'
             survey = []
 
-            database = 'VHSDR6'
+            database = 'VHSDR7'
             if overlays or save_result_tables:
                 try:
                     table = Vsa.query_region(coords, radius=radius, database=database, programme_id='VHS')
@@ -1244,7 +1251,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 for row in table:
                     try:
                         download_url = 'http://ps1images.stsci.edu/cgi-bin/fitscut.cgi?format=fits&red={filename}&ra={ra}&dec={dec}&size={size}'
-                        download_url = download_url.format(filename=row['filename'], ra=ra, dec=dec, size=img_size*4)
+                        download_url = download_url.format(filename=row['filename'], ra=ra, dec=dec, size=img_size * 4)
                         images[row['filter']] = fits.open(download_file(download_url, cache=cache, show_progress=show_progress, timeout=timeout))
                     except Exception:
                         print('A problem occurred while downloading Pan-STARRS images for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
@@ -1436,7 +1443,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             if imageW1 and imageW2:
                 hdu = imageW1[0]
                 header = hdu.header
-                mjdmean = (header['MJDMIN']+header['MJDMAX'])/2
+                mjdmean = (header['MJDMIN'] + header['MJDMAX']) / 2
                 header['MJDMEAN'] = mjdmean
                 prev_year = get_year_from_mjd(mjdmean)
                 dataW1 = hdu.data
@@ -1452,13 +1459,13 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                             break
                         hdu = imageW1[0]
                         h = hdu.header
-                        mjdmean = (h['MJDMIN']+h['MJDMAX'])/2
+                        mjdmean = (h['MJDMIN'] + h['MJDMAX']) / 2
                         year = get_year_from_mjd(mjdmean)
                         if year == prev_year:
                             j += 1
                         else:
-                            hduW1 = fits.PrimaryHDU(data=dataW1/j, header=header)
-                            hduW2 = fits.PrimaryHDU(data=dataW2/j, header=header)
+                            hduW1 = fits.PrimaryHDU(data=dataW1 / j, header=header)
+                            hduW2 = fits.PrimaryHDU(data=dataW2 / j, header=header)
                             images.append((hduW1, hduW2, prev_year))
                             j = 1
                         header = hdu.header
@@ -1471,8 +1478,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                               .format(ra=ra, dec=dec, epoch=i))
                         print(traceback.format_exc())
 
-                hduW1 = fits.PrimaryHDU(data=dataW1/j, header=header)
-                hduW2 = fits.PrimaryHDU(data=dataW2/j, header=header)
+                hduW1 = fits.PrimaryHDU(data=dataW1 / j, header=header)
+                hduW2 = fits.PrimaryHDU(data=dataW2 / j, header=header)
                 images.append((hduW1, hduW2, prev_year))
 
                 survey = []
@@ -1484,7 +1491,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     w2, x, y, wcs, time_obs = process_image_data(image[1], date_obs_key, date_pattern)
                     if w1 is not None and w2 is not None:
                         wise_epoch = image[2]
-                        survey.append(ImageBucket(create_color_image(w1, (w1+w2)/2, w2, neowise=True), x, y, 'W1-W2', wise_epoch, wcs, time_obs=time_obs))
+                        survey.append(ImageBucket(create_color_image(w1, (w1 + w2) / 2, w2, neowise=True), x, y, 'W1-W2', wise_epoch, wcs, time_obs=time_obs))
 
                 survey.insert(0, 9999)
 
