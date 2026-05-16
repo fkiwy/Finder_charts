@@ -10,7 +10,7 @@
 - Spitzer (IRAC1, IRAC2, IRAC3, IRAC4, MIPS24),
 - WISE (W1, W2, W3, W4),
 - UKIDSS (Y, J, H, K),
-- UHS (J, K),
+- UHS (J, H, K),
 - VHS (Y, J, H, K),
 - VVV (Z, Y, J, H, K),
 - VIKING (Z, Y, J, H, K),
