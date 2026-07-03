@@ -71,9 +71,9 @@ class Target:
 
 
 def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='red', dss=True, twomass=True, spitzer=True, wise=True,
-                         ukidss=True, uhs=True, vhs=True, vvv=True, viking=True, ps1=True, decam=True, neowise=True, neowise_contrast=3,
-                         gaia_images=False, gaia_entries=False, gaia_pm_vectors=False, gaia_pm_years=10, gaia_color='green', targets=None,
-                         pmra=None, pmdec=None, ref_epoch=None, crosshair_type=Crosshair.CIRCLE_DOT, propagate_gaia_positions=False,
+                         ukidss=True, uhs=True, vhs=True, vvv=True, viking=True, ps1=True, decam=True, legacy_surveys=False,
+                         neowise=True, neowise_contrast=3, gaia_images=False, gaia_entries=False, gaia_pm_vectors=False, gaia_pm_years=10,
+                         gaia_color='green', targets=None, pmra=None, pmdec=None, ref_epoch=None, crosshair_type=Crosshair.CIRCLE_DOT, propagate_gaia_positions=False,
                          chrono_order=True, object_info=True, directory=tempfile.gettempdir(), cache=True, show_progress=True, timeout=300,
                          open_file=True, file_format='pdf', save_result_tables=False, result_tables_format='ipac', result_tables_extension='dat'):
     """
@@ -88,7 +88,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
     - VVV (Z, Y, J, H, K),
     - VIKING (Z, Y, J, H, K),
     - Pan-STARRS (g, r, i, z, y),
-    - DECam (g, r, i, z, Y).
+    - DECam (g, r, i, z, Y),
+    - Legacy Surveys (g, r, i, z).
 
     This function also creates a WISE time series of epochs 2010, (2013), and 2014-2021.
     Required arguments are ``ra`` and ``dec`` in decimal degrees, which can be specified either as a scalar, Python sequence (list, tuple, ...), or Numpy array.
@@ -128,6 +129,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         Whether to create Pan-STARRS image series. The default is True.
     decam : bool, optional
         Whether to create DECam image series. The default is True.
+    legacy_surveys : bool, optional
+        Whether to create Legacy Surveys image series. The default is False.
     neowise : bool, optional
         Whether to create WISE time series. The default is True.
     neowise_contrast : int, optional
@@ -238,23 +241,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         def create_color_image(r, g, b, neowise=False):
             try:
-                if r is None or b is None:
+                if r is None or g is None or b is None:
                     return None
-
-                if g is None:
-                    if b.shape == r.shape:
-                        g = (b + r) / 2
-                    else:
-                        xmin = min([r.shape[0], b.shape[0]])
-                        ymin = min([r.shape[1], b.shape[1]])
-                        xmax = max([r.shape[0], b.shape[0]])
-                        ymax = max([r.shape[1], b.shape[1]])
-                        if xmax - xmin <= 2 and ymax - ymin <= 2:
-                            r = r[0:xmin, 0:ymin]
-                            b = b[0:xmin, 0:ymin]
-                            g = (b + r) / 2
-                        else:
-                            return None
 
                 if neowise:
                     vmin, vmax = get_min_max(g, lo=neowise_contrast, hi=100 - neowise_contrast)
@@ -481,6 +469,52 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 print(traceback.format_exc())
                 return None
 
+        def get_legacy_surveys_image(ra, dec, band, size):
+            try:
+                fov = (size * u.arcsec).to(u.deg)
+                svc = sia.SIAService('https://datalab.noirlab.edu/sia/ls_dr10')
+                result = svc.search((ra, dec), (fov / np.cos(dec * np.pi / 180), fov), verbosity=2).to_table()
+                select = (result['prodtype'].astype(str) == 'image') & (np.char.startswith(result['obs_bandpass'].astype(str), band))
+                table = result[select]
+                if len(table) > 0:
+                    row = table[np.argmax(table['exptime'].data.data.astype('float'))]  # get image with longest exposure time
+                    image = fits.open(download_file(row['access_url'], cache=cache, show_progress=show_progress, timeout=timeout))
+                    instrument = row['instrument_name']
+                    return image, instrument
+                else:
+                    return None, None
+            except Exception:
+                print('A problem occurred while downloading Legacy Surveys images for object ra={ra}, dec={dec}, band={band}'.format(ra=ra, dec=dec, band=band))
+                print(traceback.format_exc())
+                return None, None
+
+        def search_legacy_surveys(ra, dec, radius):
+            try:
+                radius = radius.to(u.deg)
+                query_url = 'https://datalab.noirlab.edu/tap/sync'
+                adql = """
+                       SELECT *
+                       FROM ls_dr10.tractor
+                       WHERE 't' = q3c_radial_query(ra, dec, {ra}, {dec}, {radius}) \
+                       """
+                adql = adql.format(ra=ra, dec=dec, radius=radius.value)
+                payload = {
+                    'request': 'doQuery',
+                    'lang': 'ADQL',
+                    'format': 'csv',
+                    'query': adql
+                }
+                response = requests.get(query_url, params=payload, timeout=timeout)
+                table = ascii.read(response.text, format='csv')
+                if len(table) > 0:
+                    return table
+                else:
+                    return None
+            except Exception:
+                print('A problem occurred while downloading Legacy Surveys catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                print(traceback.format_exc())
+                return None
+
         def search_panstarrs(ra, dec, radius):
             query_url = 'https://catalogs.mast.stsci.edu/api/v0.1/panstarrs/dr2/mean.csv'
             payload = {
@@ -496,6 +530,11 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 return table
             else:
                 return None
+
+        def calculate_separation(target_ra, target_dec, catalog_ra, catalog_dec):
+            target_coords = SkyCoord([target_ra * u.deg], [target_dec * u.deg])
+            catalog_coords = SkyCoord(catalog_ra, catalog_dec, unit="deg")
+            return target_coords.separation(catalog_coords).arcsec
 
         def replace_table_values(table, value_to_replace, replacement):
             for colname in table.colnames:
@@ -640,7 +679,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'DSS2 IR-R-B', mean_obs_year, wcs, time_obs=time_obs))
             else:
@@ -702,7 +741,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, '2MASS K-H-J', mean_obs_year, wcs, time_obs=time_obs))
             else:
@@ -763,7 +802,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x_j, y_j, 'IRAC 3-2-1', mean_obs_year, wcs_j, time_obs=time_obs_j))
             else:
@@ -832,7 +871,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'WISE 3-2-1', mean_obs_year, wcs, time_obs=time_obs))
             else:
@@ -904,7 +943,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x_j, y_j, 'UKIDSS K-H-J', mean_obs_year, wcs_j, time_obs=time_obs_j))
             else:
@@ -967,7 +1006,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'UHS K-H-J', mean_obs_year, wcs, time_obs=time_obs))
             else:
@@ -1048,7 +1087,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'VHS K-H-J', mean_obs_year, wcs, time_obs=time_obs))
             else:
@@ -1129,7 +1168,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'VVV K-H-J', mean_obs_year, wcs, time_obs=time_obs))
             else:
@@ -1208,7 +1247,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'VIKING K-H-J', mean_obs_year, wcs, time_obs=time_obs))
             else:
@@ -1310,7 +1349,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     else:
                         survey.append(None)
 
-                    if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+                    if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
                         mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                         survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'PS1 y-i-g', mean_obs_year, wcs, time_obs=time_obs))
                     else:
@@ -1401,13 +1440,88 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
+            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, instrument + ' Y-i-g', mean_obs_year, wcs, time_obs=time_obs))
             else:
                 survey.insert(0, None)
 
             survey.insert(0, mean_obs_year)
+
+            surveys.append(survey)
+
+        # Legacy Surveys
+        if legacy_surveys:
+            x = y = x_j = y_j = 0
+            r = g = b = wcs = time_obs = wcs_j = time_obs_j = None
+            mean_obs_year = 0
+            year_r = year_g = year_b = np.nan
+            overlay_ra = overlay_dec = op1 = op2 = op3 = op4 = op5 = None
+            date_obs_key = 'MJD_MEAN'
+            date_pattern = 'MJD'
+            survey = []
+
+            if overlays or save_result_tables:
+                try:
+                    table = search_legacy_surveys(ra, dec, radius)
+                    if table:
+                        table.add_column(calculate_separation(ra, dec, table["ra"], table["dec"]), name="distance")
+                        table.sort("distance")
+                        overlay_ra = table['ra']
+                        overlay_dec = table['dec']
+                        op1 = table['mag_g']
+                        op2 = table['mag_r']
+                        op3 = table['mag_i']
+                        op4 = table['mag_z']
+                        save_catalog_search_results(table, 'LS_DR10', ra, dec)
+                except Exception:
+                    print('A problem occurred while downloading Legacy Surveys catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                    print(traceback.format_exc())
+
+            image, instrument = get_legacy_surveys_image(ra, dec, 'g', img_size)
+            if image:
+                instrument_used = instrument
+                year_b = get_year_obs(image[0], date_obs_key, date_pattern)
+                b, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
+                survey.append(ImageBucket(b, x, y, instrument + ' g', year_b, wcs, overlay_ra, overlay_dec, op1, time_obs=time_obs))
+            else:
+                survey.append(None)
+
+            image, instrument = get_legacy_surveys_image(ra, dec, 'r', img_size)
+            if image:
+                instrument_used = instrument
+                year_g = get_year_obs(image[0], date_obs_key, date_pattern)
+                g, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
+                survey.append(ImageBucket(g, x, y, instrument + ' r', year_g, wcs, overlay_ra, overlay_dec, op2, time_obs=time_obs))
+            else:
+                survey.append(None)
+
+            image, instrument = get_legacy_surveys_image(ra, dec, 'i', img_size)
+            if image:
+                instrument_used = instrument
+                r, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
+                survey.append(ImageBucket(r, x, y, instrument + ' i', get_year_obs(image[0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op3, time_obs=time_obs))
+            else:
+                survey.append(None)
+
+            image, instrument = get_legacy_surveys_image(ra, dec, 'z', img_size)
+            if image:
+                instrument_used = instrument
+                year_r = get_year_obs(image[0], date_obs_key, date_pattern)
+                r, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
+                survey.append(ImageBucket(r, x, y, instrument + ' z', year_r, wcs, overlay_ra, overlay_dec, op4, time_obs=time_obs))
+            else:
+                survey.append(None)
+
+            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
+                mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
+                survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, instrument_used + ' z-r-g', mean_obs_year, wcs, time_obs=time_obs))
+            else:
+                survey.insert(0, None)
+
+            survey.insert(0, mean_obs_year)
+
+            survey.append(None)
 
             surveys.append(survey)
 
