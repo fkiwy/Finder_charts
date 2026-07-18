@@ -4,5 +4,8 @@ pillow
 requests
 astropy
 astroquery
+pyvo
 reproject
 tqdm
+beautifulsoup4
+python-dateutil
