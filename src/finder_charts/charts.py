@@ -31,6 +31,7 @@ from pyvo.dal import sia
 from reproject import reproject_interp
 from reproject.mosaicking import find_optimal_celestial_wcs
 
+from . import wsa
 from .gaia import create_gaia_finder_chart
 
 
@@ -968,7 +969,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             database = 'UHSDR3'
             if overlays or save_result_tables:
                 try:
-                    table = uhs.query_region(ra, dec, radius=radius.value, database="UHSDR3")
+                    table = wsa.query_region(ra, dec, radius=radius.value, database=database)
                     if table:
                         replace_table_values(table, -999999500.0, np.nan)
                         overlay_ra = table['ra']
