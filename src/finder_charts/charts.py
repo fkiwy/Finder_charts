@@ -31,8 +31,7 @@ from pyvo.dal import sia
 from reproject import reproject_interp
 from reproject.mosaicking import find_optimal_celestial_wcs
 
-import Uhs
-from Gaia_finder_chart import create_gaia_finder_chart
+from .gaia import create_gaia_finder_chart
 
 
 class Crosshair(Enum):
@@ -679,7 +678,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'DSS2 IR-R-B', mean_obs_year, wcs, time_obs=time_obs))
             else:
@@ -741,7 +740,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, '2MASS K-H-J', mean_obs_year, wcs, time_obs=time_obs))
             else:
@@ -802,7 +801,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x_j, y_j, 'IRAC 3-2-1', mean_obs_year, wcs_j, time_obs=time_obs_j))
             else:
@@ -871,7 +870,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'WISE 3-2-1', mean_obs_year, wcs, time_obs=time_obs))
             else:
@@ -943,7 +942,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x_j, y_j, 'UKIDSS K-H-J', mean_obs_year, wcs_j, time_obs=time_obs_j))
             else:
@@ -969,7 +968,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             database = 'UHSDR3'
             if overlays or save_result_tables:
                 try:
-                    table = Uhs.query_region(ra, dec, radius=radius.value, database="UHSDR3")
+                    table = uhs.query_region(ra, dec, radius=radius.value, database="UHSDR3")
                     if table:
                         replace_table_values(table, -999999500.0, np.nan)
                         overlay_ra = table['ra']
@@ -1006,7 +1005,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'UHS K-H-J', mean_obs_year, wcs, time_obs=time_obs))
             else:
@@ -1087,7 +1086,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'VHS K-H-J', mean_obs_year, wcs, time_obs=time_obs))
             else:
@@ -1168,7 +1167,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'VVV K-H-J', mean_obs_year, wcs, time_obs=time_obs))
             else:
@@ -1247,7 +1246,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'VIKING K-H-J', mean_obs_year, wcs, time_obs=time_obs))
             else:
@@ -1349,7 +1348,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     else:
                         survey.append(None)
 
-                    if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
+                    if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
                         mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                         survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, 'PS1 y-i-g', mean_obs_year, wcs, time_obs=time_obs))
                     else:
@@ -1440,7 +1439,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, instrument + ' Y-i-g', mean_obs_year, wcs, time_obs=time_obs))
             else:
@@ -1513,7 +1512,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            if np.isfinite(year_r) and np.isfinite(year_g) and np.isfinite(year_b):
+            if np.isfinite(year_r) or np.isfinite(year_g) or np.isfinite(year_b):
                 mean_obs_year = round(np.nanmean([year_r, year_g, year_b]), 1)
                 survey.insert(0, ImageBucket(create_color_image(r, g, b), x, y, instrument_used + ' z-r-g', mean_obs_year, wcs, time_obs=time_obs))
             else:

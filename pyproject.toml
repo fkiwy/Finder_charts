@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "finder-charts"
+version = "1.1.0"
+description = "Multi-band finder charts from image data of astronomical sky surveys"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Frank Kiwy", email = "frank.kiwy@outlook.com" }]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "astropy",
+    "astroquery",
+    "beautifulsoup4",
+    "matplotlib",
+    "numpy",
+    "pillow",
+    "python-dateutil",
+    "pyvo",
+    "reproject",
+    "requests",
+    "tqdm",
+]
+
+[project.urls]
+Homepage = "https://github.com/fkiwy/Finder_charts"
+Repository = "https://github.com/fkiwy/Finder_charts"
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = ["Finder_charts"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+extend-exclude = ["Finder_charts_run.py"]

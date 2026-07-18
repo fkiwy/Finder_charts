@@ -4,7 +4,7 @@
 
 <a href="https://ascl.net/2210.004"><img src="https://img.shields.io/badge/ascl-2210.004-blue.svg?colorB=262255" alt="ascl:2210.004" /></a>
 
- ```Finder_charts``` is a Python module to create multi-bands finder charts from image data of following sky surveys:
+`finder_charts` is a Python package to create multi-bands finder charts from image data of following sky surveys:
 - DSS (DSS1 B, DSS1 R, DSS2 B, DSS2 R, DSS2 IR),
 - 2MASS (J, H, K),
 - Spitzer (IRAC1, IRAC2, IRAC3, IRAC4, MIPS24),
@@ -25,7 +25,7 @@ The ```create_finder_charts``` function only takes two mandatory arguments, RA a
 
 This is a minimal usage example:
 ```python
-from Finder_charts import create_finder_charts
+from finder_charts import create_finder_charts
 create_finder_charts(16.9701886, 0.6992208)
 ```
 
@@ -61,8 +61,20 @@ The code can be installed as follows:
 ```
 git clone https://github.com/fkiwy/Finder_charts.git
 cd Finder_charts
-python setup.py install
+python -m pip install .
 ```
+
+### Development
+
+Install the project in editable mode with its test dependencies, then run the
+offline test suite:
+```
+python -m pip install -e ".[test]"
+python -m pytest
+```
+
+The runnable examples live in `examples/`. `examples/basic.py` performs live
+queries to astronomical survey services and is therefore not part of CI.
 
 ### Parameter description:
 - ```ra``` : right ascension in decimal degrees (type: float)
@@ -96,7 +108,7 @@ python setup.py install
       ...
   ]
 ```
-where ``catalog`` is the catalog label and ``survey`` is of type Finder_charts.Survey
+where ``catalog`` is the catalog label and ``survey`` is of type `finder_charts.Survey`
 - ```pmra``` : proper motion in RA (mas/yr) used to propagate the crosshair position to the appropriate survey epoch (type: float, default: None)
 - ```pmdec``` : proper motion in declination (mas/yr) used to propagate the crosshair position to the appropriate survey epoch (type: float, default: None)
 - ```ref_epoch``` :  epoch of ``ra`` and ``dec`` used to propagate the crosshair position to the appropriate survey epoch (type: astropy.time.Time, default: None)
@@ -122,7 +134,7 @@ where ``catalog`` is the catalog label and ``survey`` is of type Finder_charts.S
 
 Here's a more advanced example with propagated crosshairs and Gaia positions plus proper motion vectors:
 ```python
-from Finder_charts import create_finder_charts, Crosshair, Survey, Target
+from finder_charts import create_finder_charts, Crosshair, Survey, Target
 from astropy.time import Time
 import tempfile
 
