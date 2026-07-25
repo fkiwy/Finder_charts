@@ -21,3 +21,4 @@ def test_chart_function_retains_its_required_coordinates():
 
     assert list(signature.parameters)[:2] == ["ra", "dec"]
     assert signature.parameters["img_size"].default == 100
+    assert signature.parameters["legacy_surveys_timeseries"].default is False

@@ -15,9 +15,10 @@
 - VVV (Z, Y, J, H, K),
 - VIKING (Z, Y, J, H, K),
 - Pan-STARRS (g, r, i, z, y),
-- DECam (g, r, i, z, Y).
+- DECam (g, r, i, z, Y),
+- Legacy Surveys DR10 (g, r, i, z).
 
-It also creates a WISE time series of epochs 2010, (2013), and 2014-2021.
+It also creates a WISE time series of epochs 2010, (2013), and 2014-2021. An optional Legacy Surveys time series uses calibrated DECam g, r, and z single exposures from the NOIRLab archive, selecting one exposure per band and observing year.
 
 All images are reprojected so that north is up and east is to the left (except for some surveys at high declination).
 
@@ -93,6 +94,8 @@ queries to astronomical survey services and is therefore not part of CI.
 - ```viking``` : whether to create VIKING image series (type: bool, default: True)
 - ```ps1``` : whether to create Pan-STARRS image series (type: bool, default: True)
 - ```decam``` : whether to create DECam image series (type: bool, default: True)
+- ```legacy_surveys``` : whether to create Legacy Surveys DR10 image series (type: bool, default: False)
+- ```legacy_surveys_timeseries``` : whether to create a Legacy Surveys g-r-z time series from calibrated DECam single exposures (type: bool, default: False)
 - ```neowise``` : whether to create WISE time series (type: bool, default: True)
 - ```neowise_contrast``` : WISE time series contrast (type: int, default: 3)
 - ```gaia_images``` : whether to create simulated Gaia image series (type: bool, default: False)
@@ -143,7 +146,7 @@ pmra, pmdec = -124.825, -713.244
 ref_epoch = Time(2016.0, format='jyear')
 
 create_finder_charts(ra, dec, img_size=100, overlays=True, overlay_color='red', dss=True, twomass=True, spitzer=True, wise=True,
-                     ukidss=True, uhs=True, vhs=True, vvv=True, viking=True, ps1=True, decam=True, neowise=True, neowise_contrast=5,
+                     ukidss=True, uhs=True, vhs=True, vvv=True, viking=True, ps1=True, decam=True, legacy_surveys=True, legacy_surveys_timeseries=True, neowise=True, neowise_contrast=5,
                      gaia_images=True, gaia_entries=True, gaia_pm_vectors=True, gaia_pm_years=50, gaia_color='green', targets=None,
                      pmra=pmra, pmdec=pmdec, ref_epoch=ref_epoch, crosshair_type=Crosshair.CROSS_NO_CENTER, propagate_gaia_positions=True,
                      chrono_order=True, object_info=True, directory=tempfile.gettempdir(), cache=True, show_progress=True, timeout=300,

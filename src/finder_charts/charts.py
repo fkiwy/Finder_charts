@@ -56,6 +56,7 @@ class Survey(Enum):
     VIKING = 'VIKING'
     PS1 = 'PS1'
     DECAM = 'DECam'
+    LEGACY_SURVEYS = 'LS DR10'
     GAIA = 'Gaia'
 
 
@@ -72,7 +73,7 @@ class Target:
 
 def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='red', dss=True, twomass=True, spitzer=True, wise=True,
                          ukidss=True, uhs=True, vhs=True, vvv=True, viking=True, ps1=True, decam=True, legacy_surveys=False,
-                         neowise=True, neowise_contrast=3, gaia_images=False, gaia_entries=False, gaia_pm_vectors=False, gaia_pm_years=10,
+                         legacy_surveys_timeseries=False, neowise=True, neowise_contrast=3, gaia_images=False, gaia_entries=False, gaia_pm_vectors=False, gaia_pm_years=10,
                          gaia_color='green', targets=None, pmra=None, pmdec=None, ref_epoch=None, crosshair_type=Crosshair.CIRCLE_DOT, propagate_gaia_positions=False,
                          chrono_order=True, object_info=True, directory=tempfile.gettempdir(), cache=True, show_progress=True, timeout=300,
                          open_file=True, file_format='pdf', save_result_tables=False, result_tables_format='ipac', result_tables_extension='dat'):
@@ -91,7 +92,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
     - DECam (g, r, i, z, Y),
     - Legacy Surveys (g, r, i, z).
 
-    This function also creates a WISE time series of epochs 2010, (2013), and 2014-2021.
+    This function also creates a WISE time series of epochs 2010, (2013), and 2014-2021. An optional Legacy Surveys time series is assembled from calibrated DECam g, r, and z single exposures in each observing year.
     Required arguments are ``ra`` and ``dec`` in decimal degrees, which can be specified either as a scalar, Python sequence (list, tuple, ...), or Numpy array.
     The resulting finder charts are saved to the directory given by parameter ``directory`` and automatically opened if ``open_file`` is set to True.
 
@@ -131,6 +132,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         Whether to create DECam image series. The default is True.
     legacy_surveys : bool, optional
         Whether to create Legacy Surveys image series. The default is False.
+    legacy_surveys_timeseries : bool, optional
+        Whether to create a Legacy Surveys g-r-z time series from calibrated DECam single exposures. The default is False.
     neowise : bool, optional
         Whether to create WISE time series. The default is True.
     neowise_contrast : int, optional
@@ -213,10 +216,10 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         def process_image_data(hdu, date_obs_key, date_pattern, hdu2=None):
             try:
                 data = hdu.data
-                nanValues = np.count_nonzero(np.isnan(data))
-                totValues = np.count_nonzero(data)
+                nan_values = np.count_nonzero(np.isnan(data))
+                tot_values = np.count_nonzero(data)
 
-                if nanValues < totValues * 0.5:
+                if nan_values < tot_values * 0.5:
                     wcs, shape = find_optimal_celestial_wcs([hdu])
                     data, _ = reproject_interp(hdu, wcs, shape_out=shape)
                     position = SkyCoord(ra * u.deg, dec * u.deg)
@@ -340,7 +343,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
                 if gaia_pm_vectors:
                     for gaia_ra, gaia_dec, gaia_pmra, gaia_pmdec in zip(gaia_overlay_ra, gaia_overlay_dec, gaia_overlay_pmra, gaia_overlay_pmdec):
-                        coords1, coords2 = apply_PM(gaia_ra, gaia_dec, gaia_pmra, gaia_pmdec)
+                        coords1, coords2 = apply_pm(gaia_ra, gaia_dec, gaia_pmra, gaia_pmdec)
                         x1, y1 = wcs.world_to_pixel(coords1)
                         x2, y2 = wcs.world_to_pixel(coords2)
                         dx = x2 - x1
@@ -360,7 +363,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 print('A problem occurred while plotting an image for object ra={ra}, dec={dec}, band={band}'.format(ra=ra, dec=dec, band=band))
                 print(traceback.format_exc())
 
-        def apply_PM(ra, dec, pmra, pmdec):
+        def apply_pm(ra, dec, pmra, pmdec):
             t1 = Time(gaia_epoch, format='jyear')
             t2 = Time(gaia_epoch + gaia_pm_years, format='jyear')
             coords1 = SkyCoord(
@@ -469,16 +472,104 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 print(traceback.format_exc())
                 return None
 
-        def get_legacy_surveys_image(ra, dec, band, size):
+        def legacy_sia_epoch_mjd(row):
+            """Return the observation MJD supplied by a Legacy Surveys SIA record."""
+            try:
+                return Time(str(row['date_obs']), format='isot', scale='utc').mjd
+            except (KeyError, TypeError, ValueError):
+                return None
+
+        def legacy_sia_epoch_groups(table, bands=('g', 'r', 'z'), stack_only=True):
+            """Select the longest LS exposure in each band for every observing year.
+
+            The archive's ``mjd_obs``/``date_obs`` fields are preferred, because its
+            SIA ``t_min``/``t_max`` values are not consistently MJD. Records without
+            a usable timestamp cannot be assigned to a time-series epoch and are
+            ignored here.
+            """
+            grouped = {}
+
+            for row in table:
+                try:
+                    if str(row['prodtype']) != 'image':
+                        continue
+                    if stack_only and 'proctype' in row.colnames and str(row['proctype']) != 'Stack':
+                        continue
+
+                    bandpass = str(row['obs_bandpass'])
+                    band = next((candidate for candidate in bands if bandpass.startswith(candidate)), None)
+                    if band is None:
+                        continue
+
+                    mjd_obs = legacy_sia_epoch_mjd(row)
+                    if mjd_obs is None:
+                        continue
+                    year = Time(mjd_obs, format='mjd', scale='utc').datetime.year
+
+                    exposure = float(row['exptime'])
+                    if not np.isfinite(exposure):
+                        exposure = 0.0
+                    previous = grouped.setdefault(year, {}).get(band)
+                    if previous is None or exposure > float(previous['exptime']):
+                        grouped[year][band] = row
+                except (KeyError, TypeError, ValueError):
+                    continue
+
+            return [(year, grouped[year]) for year in sorted(grouped) if all(band in grouped[year] for band in bands)]
+
+        def decam_single_epoch_groups(table, bands=('g', 'r', 'z')):
+            """Select one calibrated DECam exposure per band and observing year."""
+            selected_rows = []
+            for row in table:
+                try:
+                    if str(row['prodtype']) != 'image' or 'DECam' not in str(row['instrument_name']):
+                        continue
+                    if float(row['exptime']) <= 0:
+                        continue
+                    selected_rows.append(row)
+                except (KeyError, TypeError, ValueError):
+                    continue
+
+            return legacy_sia_epoch_groups(selected_rows, bands=bands, stack_only=False)
+
+        def get_legacy_surveys_sia_results(ra, dec, size):
             try:
                 fov = (size * u.arcsec).to(u.deg)
                 svc = sia.SIAService('https://datalab.noirlab.edu/sia/ls_dr10')
-                result = svc.search((ra, dec), (fov / np.cos(dec * np.pi / 180), fov), verbosity=2).to_table()
+                return svc.search((ra, dec), (fov / np.cos(dec * np.pi / 180), fov), verbosity=2).to_table()
+            except Exception:
+                print('A problem occurred while querying Legacy Surveys images for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                print(traceback.format_exc())
+                return None
+
+        def get_decam_single_epoch_sia_results(ra, dec, size):
+            try:
+                fov = (size * u.arcsec).to(u.deg)
+                svc = sia.SIAService('https://datalab.noirlab.edu/sia/calibrated_all')
+                return svc.search((ra, dec), (fov / np.cos(dec * np.pi / 180), fov), verbosity=2).to_table()
+            except Exception:
+                print('A problem occurred while querying calibrated DECam single exposures for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
+                print(traceback.format_exc())
+                return None
+
+        def download_legacy_surveys_image(row):
+            try:
+                return fits.open(download_file(row['access_url'], cache=cache, show_progress=show_progress, timeout=timeout))
+            except Exception:
+                return None
+
+        def get_legacy_surveys_image(ra, dec, band, size):
+            try:
+                result = get_legacy_surveys_sia_results(ra, dec, size)
+                if result is None:
+                    return None, None
                 select = (result['prodtype'].astype(str) == 'image') & (np.char.startswith(result['obs_bandpass'].astype(str), band))
                 table = result[select]
                 if len(table) > 0:
                     row = table[np.argmax(table['exptime'].data.data.astype('float'))]  # get image with longest exposure time
-                    image = fits.open(download_file(row['access_url'], cache=cache, show_progress=show_progress, timeout=timeout))
+                    image = download_legacy_surveys_image(row)
+                    if image is None:
+                        return None, None
                     instrument = row['instrument_name']
                     return image, instrument
                 else:
@@ -620,6 +711,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         radius = (img_size * math.sqrt(2) / 2) * u.arcsec
 
         surveys = []
+        cols = 6
+        rows = 15
 
         # Query row limit
         row_limit = 5000
@@ -1525,6 +1618,52 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
             surveys.append(survey)
 
+        # Legacy Surveys time series from calibrated DECam single exposures
+        if legacy_surveys_timeseries:
+            date_obs_key = 'MJD_MEAN'
+            date_pattern = 'MJD'
+            survey = []
+
+            result = get_decam_single_epoch_sia_results(ra, dec, img_size)
+            epoch_groups = decam_single_epoch_groups(result) if result is not None else []
+            if epoch_groups:
+                for epoch_year, rows_by_band in epoch_groups:
+                    processed = {}
+                    for band, row in rows_by_band.items():
+                        image = download_legacy_surveys_image(row)
+                        if image is None:
+                            processed = {}
+                            break
+
+                        hdu = image[0]
+                        if date_obs_key not in hdu.header:
+                            hdu.header[date_obs_key] = legacy_sia_epoch_mjd(row)
+                        data, x, y, wcs, time_obs = process_image_data(hdu, date_obs_key, date_pattern)
+                        if data is None:
+                            processed = {}
+                            break
+                        processed[band] = (data, x, y, wcs, time_obs, str(row['instrument_name']))
+
+                    if not processed:
+                        continue
+
+                    z, x, y, wcs, time_obs, instrument = processed['z']
+                    r = processed['r'][0]
+                    g = processed['g'][0]
+                    epoch_time_obs = Time(np.mean([processed[band][4].jyear for band in ('g', 'r', 'z')]), format='jyear')
+                    position = SkyCoord(ra * u.deg, dec * u.deg)
+                    if None not in (pmra, pmdec, ref_epoch):
+                        position = propagate_position(ra, dec, pmra, pmdec, ref_epoch, epoch_time_obs)
+                    x, y = wcs.world_to_pixel(position)
+                    survey.append(ImageBucket(create_color_image(z, r, g), x, y, instrument + ' z-r-g', epoch_year, wcs,
+                                              None, None, None, time_obs=epoch_time_obs.jyear))
+
+                if len(survey) > 1:
+                    survey.insert(0, 8000)
+                    for i in range(cols + 1 - len(survey)):
+                        survey.append(None)
+                    surveys.append(survey)
+
         # Gaia simulated images
         if gaia_images:
             survey = []
@@ -1607,15 +1746,13 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                         wise_epoch = image[2]
                         survey.append(ImageBucket(create_color_image(w1, (w1 + w2) / 2, w2, neowise=True), x, y, 'W1-W2', wise_epoch, wcs, time_obs=time_obs))
 
-                survey.insert(0, 9999)
+                survey.insert(0, 9000)
 
                 surveys.append(survey)
 
         # Plot image series
         if chrono_order:
             surveys.sort(key=lambda x: x[0])  # sort by mean observation year
-        cols = 6
-        rows = 15
         img_idx = 0
         info_idx = 0
         for survey in surveys:
