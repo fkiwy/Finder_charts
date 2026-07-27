@@ -32,6 +32,22 @@ create_finder_charts(16.9701886, 0.6992208)
 
 The resulting finder charts are saved to the directory given by parameter ```directory``` and automatically opened if ```open_file``` is set to True.
 Catalog search results can be saved to the same directory by setting ```save_result_tables``` to True.
+
+### Parallel downloads and survey processing
+
+Set ```parallel_surveys=True``` to build enabled survey series concurrently. Each worker downloads and processes one survey, while the combined chart is rendered afterwards on the main thread. ```max_download_workers``` limits the number of concurrent workers (default: 4); set it to ```1``` to use sequential downloads and processing.
+
+```python
+create_finder_charts(
+    16.9701886,
+    0.6992208,
+    parallel_surveys=True,
+    max_download_workers=4,
+)
+```
+
+Survey archives may apply their own rate limits, so lower ```max_download_workers``` if a service reports throttling or intermittent failures.
+
 This creates one file per catalog search results, e.g. Finder_charts_2MASS_results_16.970189+0.699221.dat :
 ```
 |    _r|   RAJ2000|   DEJ2000|errMaj|errMin|errPA|          _2MASS|  Jmag|Jcmsig|e_Jmag|      Jsnr|  Hmag|Hcmsig|e_Hmag|      Hsnr|  Kmag|Kcmsig|e_Kmag|      Ksnr|Qflg|Rflg|Bflg|Cflg|  Ndet|  prox|pxPA|    pxCntr|Xflg|Aflg|      Cntr|Hemis|      Date|Scan|   GLON|   GLAT| Xscan|    _tab1_36|Jpsfchi|Hpsfchi|Kpsfchi|Jstdap|e_Jstdap|Hstdap|e_Hstdap|Kstdap|e_Kstdap|edgeNS|edgeEW|edge| dup| use| opt|  Dopt|PAopt| Bmag| Rmag|Nopt|extKey|scanKey|coaddKey|coadd| Opt|
@@ -123,6 +139,8 @@ where ``catalog`` is the catalog label and ``survey`` is of type `finder_charts.
 - ```cache``` : whether to cache the downloaded files (type: bool, default: True)
 - ```show_progress``` : whether to show the file download progress (type: bool, default: True)
 - ```timeout``` : timeout for remote requests in seconds (type: int, default: 300)
+- ```max_download_workers``` : maximum number of concurrent download workers; set to ```1``` for sequential downloads (type: int, default: 4)
+- ```parallel_surveys``` : whether to build enabled surveys concurrently before rendering the combined chart (type: bool, default: False)
 - ```open_pdf``` : deprecated, replaced by ```open_file```
 - ```open_file``` : whether to open the saved finder charts automatically (type: bool, default: True)
 - ```file_format``` : output file format: pdf, png, eps, etc. (type: str, default: 'pdf')
@@ -150,6 +168,7 @@ create_finder_charts(ra, dec, img_size=100, overlays=True, overlay_color='red', 
                      gaia_images=True, gaia_entries=True, gaia_pm_vectors=True, gaia_pm_years=50, gaia_color='green', targets=None,
                      pmra=pmra, pmdec=pmdec, ref_epoch=ref_epoch, crosshair_type=Crosshair.CROSS_NO_CENTER, propagate_gaia_positions=True,
                      chrono_order=True, object_info=True, directory=tempfile.gettempdir(), cache=True, show_progress=True, timeout=300,
-                     open_file=True, file_format='png', save_result_tables=True, result_tables_format='ipac', result_tables_extension='dat')
+                     max_download_workers=4, parallel_surveys=True, open_file=True, file_format='png', save_result_tables=True,
+                     result_tables_format='ipac', result_tables_extension='dat')
 ```
 ![Example output](example_output/example_output_propagated_positions.png)

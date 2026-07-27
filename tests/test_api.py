@@ -25,6 +25,7 @@ def test_chart_function_retains_its_required_coordinates():
     assert signature.parameters["img_size"].default == 100
     assert signature.parameters["legacy_surveys_timeseries"].default is False
     assert signature.parameters["max_download_workers"].default == 4
+    assert signature.parameters["parallel_surveys"].default is False
 
 
 def test_chart_function_rejects_zero_download_workers():

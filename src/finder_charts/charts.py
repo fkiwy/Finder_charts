@@ -78,7 +78,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                          gaia_color='green', targets=None, pmra=None, pmdec=None, ref_epoch=None, crosshair_type=Crosshair.CIRCLE_DOT, propagate_gaia_positions=False,
                          chrono_order=True, object_info=True, directory=tempfile.gettempdir(), cache=True, show_progress=True, timeout=300,
                          open_file=True, file_format='pdf', save_result_tables=False, result_tables_format='ipac', result_tables_extension='dat',
-                         max_download_workers=4):
+                         max_download_workers=4, parallel_surveys=False):
     """
     Creates multi-bands finder charts from image data of following sky surveys:
     - DSS (DSS1 B, DSS1 R, DSS2 B, DSS2 R, DSS2 IR),
@@ -195,6 +195,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
     max_download_workers : int, optional
         Maximum number of independent image downloads to run concurrently. Set to 1
         to retain sequential downloading. The default is 4.
+    parallel_surveys : bool, optional
+        Whether to build enabled survey series concurrently before rendering the
+        combined chart. The default is False.
 
     Raises
     ------
@@ -216,15 +219,34 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             self.overlay_phot = overlay_phot
             self.time_obs = time_obs
 
-    def finder_charts(ra, dec, targets):
+    def finder_charts(ra, dec, targets, enabled_surveys=None, collect_only=False, collected_surveys=None):
+        options = dict(survey_options)
+        if enabled_surveys is not None:
+            options.update(enabled_surveys)
+        dss = options['dss']
+        twomass = options['twomass']
+        spitzer = options['spitzer']
+        wise = options['wise']
+        ukidss = options['ukidss']
+        uhs = options['uhs']
+        vhs = options['vhs']
+        vvv = options['vvv']
+        viking = options['viking']
+        ps1 = options['ps1']
+        decam = options['decam']
+        legacy_surveys = options['legacy_surveys']
+        legacy_surveys_timeseries = options['legacy_surveys_timeseries']
+        neowise = options['neowise']
+        gaia_images = options['gaia_images']
         irsa_images = {}
         archive_images = {}
 
         def download_images(requests):
             """Download independent image requests concurrently, preserving order."""
-            if len(requests) == 1 or max_download_workers == 1:
+            worker_count = 1 if collect_only and parallel_surveys else max_download_workers
+            if len(requests) == 1 or worker_count == 1:
                 return [request() for request in requests]
-            with ThreadPoolExecutor(max_workers=min(max_download_workers, len(requests))) as executor:
+            with ThreadPoolExecutor(max_workers=min(worker_count, len(requests))) as executor:
                 return list(executor.map(lambda request: request(), requests))
 
         def process_image_data(hdu, date_obs_key, date_pattern, hdu2=None):
@@ -742,14 +764,18 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             targets = []
 
         plt.rcParams['font.family'] = 'Arial'
-        fig = plt.figure()
-        fig.set_figheight(15)
-        fig.set_figwidth(15)
+        fig = None
+        if not collect_only:
+            fig = plt.figure()
+            fig.set_figheight(15)
+            fig.set_figwidth(15)
 
         coords = SkyCoord(ra * u.deg, dec * u.deg)
         radius = (img_size * math.sqrt(2) / 2) * u.arcsec
 
         surveys = []
+        if collected_surveys:
+            surveys.extend(collected_surveys)
         cols = 6
         rows = 15
 
@@ -758,7 +784,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         # Get Gaia catalog entries if requested
         gaia_results = None
-        if gaia_entries or gaia_pm_vectors:
+        if (gaia_entries or gaia_pm_vectors) and not collect_only:
             Gaia.ROW_LIMIT = row_limit
             job = Gaia.cone_search_async(coords, radius=radius.to(u.deg))
             gaia_results = job.get_results()
@@ -1920,6 +1946,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
                 surveys.append(survey)
 
+        if collect_only:
+            return surveys
+
         # Plot image series
         if chrono_order:
             surveys.sort(key=lambda x: x[0])  # sort by mean observation year
@@ -1992,8 +2021,41 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
     if max_download_workers < 1:
         raise ValueError('max_download_workers must be at least 1')
 
+    survey_options = {
+        'dss': dss, 'twomass': twomass, 'spitzer': spitzer, 'wise': wise,
+        'ukidss': ukidss, 'uhs': uhs, 'vhs': vhs, 'vvv': vvv, 'viking': viking,
+        'ps1': ps1, 'decam': decam, 'legacy_surveys': legacy_surveys,
+        'legacy_surveys_timeseries': legacy_surveys_timeseries, 'neowise': neowise,
+        'gaia_images': gaia_images,
+    }
+
+    def create_one(ra_value, dec_value):
+        if not parallel_surveys:
+            finder_charts(ra_value, dec_value, targets)
+            return
+
+        selected_surveys = [name for name, enabled in survey_options.items() if enabled]
+        if len(selected_surveys) < 2:
+            finder_charts(ra_value, dec_value, targets)
+            return
+
+        disabled_surveys = dict.fromkeys(survey_options, False)
+        with ThreadPoolExecutor(max_workers=min(max_download_workers, len(selected_surveys))) as executor:
+            futures = [executor.submit(
+                finder_charts,
+                ra_value,
+                dec_value,
+                targets,
+                {name: True},
+                True,
+            ) for name in selected_surveys]
+            collected_surveys = [future.result() for future in futures]
+
+        merged_surveys = [survey for series in collected_surveys for survey in series]
+        finder_charts(ra_value, dec_value, targets, disabled_surveys, collected_surveys=merged_surveys)
+
     if np.isscalar(ra) and np.isscalar(dec):
-        finder_charts(ra, dec, targets)
+        create_one(ra, dec)
     else:
         if not isinstance(ra, (collections.Sequence, np.ndarray)):
             raise Exception('Ra must be either a sequence or a numpy array')
@@ -2006,7 +2068,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         for i in range(len(ra)):
             try:
-                finder_charts(ra[i], dec[i], targets)
+                create_one(ra[i], dec[i])
             except Exception:
                 print('A problem occurred while creating finder charts for object ra={ra}, dec={dec}'.format(ra=ra[i], dec=dec[i]))
                 print(traceback.format_exc())
