@@ -1,5 +1,7 @@
 import inspect
 
+import pytest
+
 from finder_charts import Crosshair, Survey, Target, create_finder_charts
 
 
@@ -22,3 +24,9 @@ def test_chart_function_retains_its_required_coordinates():
     assert list(signature.parameters)[:2] == ["ra", "dec"]
     assert signature.parameters["img_size"].default == 100
     assert signature.parameters["legacy_surveys_timeseries"].default is False
+    assert signature.parameters["max_download_workers"].default == 4
+
+
+def test_chart_function_rejects_zero_download_workers():
+    with pytest.raises(ValueError, match="max_download_workers"):
+        create_finder_charts(0, 0, max_download_workers=0)

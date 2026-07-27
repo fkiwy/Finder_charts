@@ -6,6 +6,7 @@ import sys
 import tempfile
 import traceback
 import warnings
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from enum import Enum
 
@@ -76,7 +77,8 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                          legacy_surveys_timeseries=False, neowise=True, neowise_contrast=3, gaia_images=False, gaia_entries=False, gaia_pm_vectors=False, gaia_pm_years=10,
                          gaia_color='green', targets=None, pmra=None, pmdec=None, ref_epoch=None, crosshair_type=Crosshair.CIRCLE_DOT, propagate_gaia_positions=False,
                          chrono_order=True, object_info=True, directory=tempfile.gettempdir(), cache=True, show_progress=True, timeout=300,
-                         open_file=True, file_format='pdf', save_result_tables=False, result_tables_format='ipac', result_tables_extension='dat'):
+                         open_file=True, file_format='pdf', save_result_tables=False, result_tables_format='ipac', result_tables_extension='dat',
+                         max_download_workers=4):
     """
     Creates multi-bands finder charts from image data of following sky surveys:
     - DSS (DSS1 B, DSS1 R, DSS2 B, DSS2 R, DSS2 IR),
@@ -190,6 +192,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         Catalog search result tables output format. The default is 'ipac'.
     result_tables_extension : str, optional
         Catalog search result tables file extension. The default is 'dat'.
+    max_download_workers : int, optional
+        Maximum number of independent image downloads to run concurrently. Set to 1
+        to retain sequential downloading. The default is 4.
 
     Raises
     ------
@@ -212,6 +217,15 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             self.time_obs = time_obs
 
     def finder_charts(ra, dec, targets):
+        irsa_images = {}
+        archive_images = {}
+
+        def download_images(requests):
+            """Download independent image requests concurrently, preserving order."""
+            if len(requests) == 1 or max_download_workers == 1:
+                return [request() for request in requests]
+            with ThreadPoolExecutor(max_workers=min(max_download_workers, len(requests))) as executor:
+                return list(executor.map(lambda request: request(), requests))
 
         def process_image_data(hdu, date_obs_key, date_pattern, hdu2=None):
             try:
@@ -399,6 +413,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 return None
 
         def get_IRSA_image(ra, dec, survey, band, size):
+            key = (survey, band)
+            if key in irsa_images:
+                return irsa_images[key]
             download_url = 'https://irsa.ipac.caltech.edu/applications/finderchart/servlet/api?mode=getImage&file_type=fits&reproject=false&' + \
                            'RA={ra}&DEC={dec}&subsetsize={size}&survey={survey}&{band}'
             download_url = download_url.format(ra=ra, dec=dec, size=size / 60, survey=survey, band=band)
@@ -407,16 +424,28 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             except Exception:
                 return None
 
-        def get_UKIDSS_image(ra, dec, band, size, database):
+        def get_UKIDSS_image(ra, dec, band, size, database, retry=0):
+            key = ('ukidss', database, band)
+            if key in archive_images:
+                return archive_images[key]
             try:
                 return Ukidss.get_images(SkyCoord(ra, dec, unit=(u.deg, u.deg)), image_width=size * u.arcsec, database=database,
                                          waveband=band, frame_type='stack', verbose=False, show_progress=show_progress)
-            except Exception:
-                print('A problem occurred while downloading UKIDSS images for object ra={ra}, dec={dec}, band={band}'.format(ra=ra, dec=dec, band=band))
-                print(traceback.format_exc())
-                return None
+            except Exception as e:
+                if retry < 3:
+                    print(f'Following error occured while downloading {database} images for object ra={ra}, dec={dec}, band={band}:', str(e))
+                    print('Retrying...')
+                    return get_UKIDSS_image(ra, dec, band, size, database, retry)
+                    retry += 1
+                else:
+                    print(f'A problem occurred while downloading {database} images for object ra={ra}, dec={dec}, band={band}')
+                    print(traceback.format_exc())
+                    return None
 
         def get_VSA_image(ra, dec, band, size, database, frame_type):
+            key = ('vsa', database, frame_type, band)
+            if key in archive_images:
+                return archive_images[key]
             try:
                 return Vsa.get_images(SkyCoord(ra, dec, unit=(u.deg, u.deg)), image_width=size * u.arcsec, database=database,
                                       waveband=band, frame_type=frame_type, verbose=False, show_progress=show_progress)
@@ -426,6 +455,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 return None
 
         def get_DECam_image(ra, dec, band, size):
+            key = ('decam', band)
+            if key in archive_images:
+                return archive_images[key]
             try:
                 fov = (size * u.arcsec).to(u.deg)
                 svc = sia.SIAService('https://datalab.noirlab.edu/sia/coadd_all')
@@ -543,6 +575,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 return None
 
         def get_decam_single_epoch_sia_results(ra, dec, size):
+            key = ('decam_timeseries',)
+            if key in archive_images:
+                return archive_images[key]
             try:
                 fov = (size * u.arcsec).to(u.deg)
                 svc = sia.SIAService('https://datalab.noirlab.edu/sia/calibrated_all')
@@ -559,6 +594,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                 return None
 
         def get_legacy_surveys_image(ra, dec, band, size):
+            key = ('legacy_surveys', band)
+            if key in archive_images:
+                return archive_images[key]
             try:
                 result = get_legacy_surveys_sia_results(ra, dec, size)
                 if result is None:
@@ -703,6 +741,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
         if targets is None:
             targets = []
 
+        plt.rcParams['font.family'] = 'Arial'
         fig = plt.figure()
         fig.set_figheight(15)
         fig.set_figwidth(15)
@@ -724,6 +763,72 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             job = Gaia.cone_search_async(coords, radius=radius.to(u.deg))
             gaia_results = job.get_results()
 
+        # These image cutouts are independent, including those from different
+        # surveys, so fetch them together before assembling the chart series.
+        irsa_requests = []
+        if dss:
+            irsa_requests.extend([
+                ('dss', 'dss_bands=poss1_blue'), ('dss', 'dss_bands=poss1_red'),
+                ('dss', 'dss_bands=poss2ukstu_blue'), ('dss', 'dss_bands=poss2ukstu_red'),
+                ('dss', 'dss_bands=poss2ukstu_ir'),
+            ])
+        if twomass:
+            irsa_requests.extend([('2mass', 'twomass_bands=j'), ('2mass', 'twomass_bands=h'), ('2mass', 'twomass_bands=k')])
+        if spitzer:
+            irsa_requests.extend([
+                ('seip', 'seip_bands=spitzer.seip_science:IRAC1'), ('seip', 'seip_bands=spitzer.seip_science:IRAC2'),
+                ('seip', 'seip_bands=spitzer.seip_science:IRAC3'), ('seip', 'seip_bands=spitzer.seip_science:IRAC4'),
+                ('seip', 'seip_bands=spitzer.seip_science:MIPS24'),
+            ])
+        if wise:
+            irsa_requests.extend([('wise', 'wise_bands=1'), ('wise', 'wise_bands=2'), ('wise', 'wise_bands=3'), ('wise', 'wise_bands=4')])
+        if irsa_requests:
+            irsa_images.update(zip(
+                irsa_requests,
+                download_images([lambda survey=survey, band=band: get_IRSA_image(ra, dec, survey, band, img_size)
+                                 for survey, band in irsa_requests]),
+            ))
+
+        if vhs or vvv or viking:
+            base_url = 'http://vsa.roe.ac.uk:8080/vdfs/'
+            Vsa.LOGIN_URL = base_url + 'DBLogin'
+            Vsa.IMAGE_URL = base_url + 'GetImage'
+            Vsa.ARCHIVE_URL = base_url + 'ImageList'
+            Vsa.REGION_URL = base_url + 'WSASQL'
+
+        archive_requests = []
+        if ukidss:
+            archive_requests.extend([(('ukidss', 'UKIDSSDR11PLUS', band),
+                                      lambda band=band: get_UKIDSS_image(ra, dec, band, img_size, 'UKIDSSDR11PLUS'))
+                                     for band in ('Y', 'J', 'H', 'K')])
+        if uhs:
+            archive_requests.extend([(('ukidss', 'UHSDR3', band),
+                                      lambda band=band: get_UKIDSS_image(ra, dec, band, img_size, 'UHSDR3'))
+                                     for band in ('J', 'H', 'K')])
+        for enabled, database, frame_type, bands in (
+                (vhs, 'VHSDR7', 'tilestack', ('Y', 'J', 'H', 'Ks')),
+                (vvv, 'VVVDR5', 'deep_stack', ('Z', 'Y', 'J', 'H', 'Ks')),
+                (viking, 'VIKINGDR5', 'tilestack', ('Z', 'Y', 'J', 'H', 'Ks')),
+        ):
+            if enabled:
+                archive_requests.extend([(('vsa', database, frame_type, band),
+                                          lambda band=band, database=database, frame_type=frame_type:
+                                          get_VSA_image(ra, dec, band, img_size, database, frame_type))
+                                         for band in bands])
+        if decam:
+            archive_requests.extend([(('decam', band), lambda band=band: get_DECam_image(ra, dec, band, img_size))
+                                     for band in ('g', 'r', 'i', 'z', 'Y')])
+        if legacy_surveys:
+            archive_requests.extend([(('legacy_surveys', band), lambda band=band: get_legacy_surveys_image(ra, dec, band, img_size))
+                                     for band in ('g', 'r', 'i', 'z')])
+        if legacy_surveys_timeseries:
+            archive_requests.append((('decam_timeseries',), lambda: get_decam_single_epoch_sia_results(ra, dec, img_size)))
+        if archive_requests:
+            archive_images.update(zip(
+                [key for key, _ in archive_requests],
+                download_images([request for _, request in archive_requests]),
+            ))
+
         # DSS
         if dss:
             x = y = x_j = y_j = 0
@@ -734,21 +839,28 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             date_pattern = '%Y-%m-%d'
             survey = []
 
-            image = get_IRSA_image(ra, dec, 'dss', 'dss_bands=poss1_blue', img_size)
+            images = iter(download_images([
+                lambda: get_IRSA_image(ra, dec, 'dss', 'dss_bands=poss1_blue', img_size),
+                lambda: get_IRSA_image(ra, dec, 'dss', 'dss_bands=poss1_red', img_size),
+                lambda: get_IRSA_image(ra, dec, 'dss', 'dss_bands=poss2ukstu_blue', img_size),
+                lambda: get_IRSA_image(ra, dec, 'dss', 'dss_bands=poss2ukstu_red', img_size),
+                lambda: get_IRSA_image(ra, dec, 'dss', 'dss_bands=poss2ukstu_ir', img_size),
+            ]))
+            image = next(images)
             if image:
                 data, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
                 survey.append(ImageBucket(data, x, y, 'DSS1 B', get_year_obs(image[0], date_obs_key, date_pattern), wcs, time_obs=time_obs))
             else:
                 survey.append(None)
 
-            image = get_IRSA_image(ra, dec, 'dss', 'dss_bands=poss1_red', img_size)
+            image = next(images)
             if image:
                 data, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
                 survey.append(ImageBucket(data, x, y, 'DSS1 R', get_year_obs(image[0], date_obs_key, date_pattern), wcs, time_obs=time_obs))
             else:
                 survey.append(None)
 
-            image = get_IRSA_image(ra, dec, 'dss', 'dss_bands=poss2ukstu_blue', img_size)
+            image = next(images)
             if image:
                 year_b = get_year_obs(image[0], date_obs_key, date_pattern)
                 b, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
@@ -756,7 +868,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            image = get_IRSA_image(ra, dec, 'dss', 'dss_bands=poss2ukstu_red', img_size)
+            image = next(images)
             if image:
                 year_g = get_year_obs(image[0], date_obs_key, date_pattern)
                 g, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
@@ -764,7 +876,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            image = get_IRSA_image(ra, dec, 'dss', 'dss_bands=poss2ukstu_ir', img_size)
+            image = next(images)
             if image:
                 year_r = get_year_obs(image[0], date_obs_key, date_pattern)
                 r, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
@@ -810,7 +922,12 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     print('A problem occurred while downloading 2MASS catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
-            image = get_IRSA_image(ra, dec, '2mass', 'twomass_bands=j', img_size)
+            images = iter(download_images([
+                lambda: get_IRSA_image(ra, dec, '2mass', 'twomass_bands=j', img_size),
+                lambda: get_IRSA_image(ra, dec, '2mass', 'twomass_bands=h', img_size),
+                lambda: get_IRSA_image(ra, dec, '2mass', 'twomass_bands=k', img_size),
+            ]))
+            image = next(images)
             if image:
                 year_b = get_year_obs(image[0], date_obs_key, date_pattern)
                 b, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
@@ -818,7 +935,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            image = get_IRSA_image(ra, dec, '2mass', 'twomass_bands=h', img_size)
+            image = next(images)
             if image:
                 year_g = get_year_obs(image[0], date_obs_key, date_pattern)
                 g, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
@@ -826,7 +943,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            image = get_IRSA_image(ra, dec, '2mass', 'twomass_bands=k', img_size)
+            image = next(images)
             if image:
                 year_r = get_year_obs(image[0], date_obs_key, date_pattern)
                 r, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
@@ -857,7 +974,14 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             date_pattern = 'MJD'
             survey = []
 
-            image = get_IRSA_image(ra, dec, 'seip', 'seip_bands=spitzer.seip_science:IRAC1', img_size)
+            images = iter(download_images([
+                lambda: get_IRSA_image(ra, dec, 'seip', 'seip_bands=spitzer.seip_science:IRAC1', img_size),
+                lambda: get_IRSA_image(ra, dec, 'seip', 'seip_bands=spitzer.seip_science:IRAC2', img_size),
+                lambda: get_IRSA_image(ra, dec, 'seip', 'seip_bands=spitzer.seip_science:IRAC3', img_size),
+                lambda: get_IRSA_image(ra, dec, 'seip', 'seip_bands=spitzer.seip_science:IRAC4', img_size),
+                lambda: get_IRSA_image(ra, dec, 'seip', 'seip_bands=spitzer.seip_science:MIPS24', img_size),
+            ]))
+            image = next(images)
             if image:
                 year_b = get_year_obs(image[0], date_obs_key, date_pattern)
                 b, x_j, y_j, wcs_j, time_obs_j = process_image_data(image[0], date_obs_key, date_pattern)
@@ -865,7 +989,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            image = get_IRSA_image(ra, dec, 'seip', 'seip_bands=spitzer.seip_science:IRAC2', img_size)
+            image = next(images)
             if image:
                 year_g = get_year_obs(image[0], date_obs_key, date_pattern)
                 g, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
@@ -873,7 +997,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            image = get_IRSA_image(ra, dec, 'seip', 'seip_bands=spitzer.seip_science:IRAC3', img_size)
+            image = next(images)
             if image:
                 year_r = get_year_obs(image[0], date_obs_key, date_pattern)
                 r, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
@@ -881,14 +1005,14 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            image = get_IRSA_image(ra, dec, 'seip', 'seip_bands=spitzer.seip_science:IRAC4', img_size)
+            image = next(images)
             if image:
                 data, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
                 survey.append(ImageBucket(data, x, y, 'IRAC 4', get_year_obs(image[0], date_obs_key, date_pattern), wcs, time_obs=time_obs))
             else:
                 survey.append(None)
 
-            image = get_IRSA_image(ra, dec, 'seip', 'seip_bands=spitzer.seip_science:MIPS24', img_size)
+            image = next(images)
             if image:
                 data, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
                 survey.append(ImageBucket(data, x, y, 'MIPS 24', get_year_obs(image[0], date_obs_key, date_pattern), wcs, time_obs=time_obs))
@@ -933,7 +1057,13 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     print('A problem occurred while downloading AllWISE catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
-            image = get_IRSA_image(ra, dec, 'wise', 'wise_bands=1', img_size)
+            images = iter(download_images([
+                lambda: get_IRSA_image(ra, dec, 'wise', 'wise_bands=1', img_size),
+                lambda: get_IRSA_image(ra, dec, 'wise', 'wise_bands=2', img_size),
+                lambda: get_IRSA_image(ra, dec, 'wise', 'wise_bands=3', img_size),
+                lambda: get_IRSA_image(ra, dec, 'wise', 'wise_bands=4', img_size),
+            ]))
+            image = next(images)
             if image:
                 year_b = get_year_obs(image[0], date_obs_key, date_pattern)
                 b, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
@@ -941,7 +1071,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            image = get_IRSA_image(ra, dec, 'wise', 'wise_bands=2', img_size)
+            image = next(images)
             if image:
                 year_g = get_year_obs(image[0], date_obs_key, date_pattern)
                 g, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
@@ -949,7 +1079,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            image = get_IRSA_image(ra, dec, 'wise', 'wise_bands=3', img_size)
+            image = next(images)
             if image:
                 year_r = get_year_obs(image[0], date_obs_key, date_pattern)
                 r, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
@@ -957,7 +1087,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            image = get_IRSA_image(ra, dec, 'wise', 'wise_bands=4', img_size)
+            image = next(images)
             if image:
                 data, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
                 survey.append(ImageBucket(data, x, y, 'WISE 4', get_year_obs(image[0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op4, time_obs=time_obs))
@@ -1005,14 +1135,20 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     print('A problem occurred while downloading UKIDSS catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
-            images = get_UKIDSS_image(ra, dec, 'Y', img_size, database)
+            images_by_band = iter(download_images([
+                lambda: get_UKIDSS_image(ra, dec, 'Y', img_size, database),
+                lambda: get_UKIDSS_image(ra, dec, 'J', img_size, database),
+                lambda: get_UKIDSS_image(ra, dec, 'H', img_size, database),
+                lambda: get_UKIDSS_image(ra, dec, 'K', img_size, database),
+            ]))
+            images = next(images_by_band)
             if images:
                 data, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern, images[0][0])
                 survey.append(ImageBucket(data, x, y, 'UKIDSS Y', get_year_obs(images[0][0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op1, time_obs=time_obs))
             else:
                 survey.append(None)
 
-            images = get_UKIDSS_image(ra, dec, 'J', img_size, database)
+            images = next(images_by_band)
             if images:
                 year_b = get_year_obs(images[0][0], date_obs_key, date_pattern)
                 b, x_j, y_j, wcs_j, time_obs_j = process_image_data(images[0][1], date_obs_key, date_pattern, images[0][0])
@@ -1020,7 +1156,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            images = get_UKIDSS_image(ra, dec, 'H', img_size, database)
+            images = next(images_by_band)
             if images:
                 year_g = get_year_obs(images[0][0], date_obs_key, date_pattern)
                 g, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern, images[0][0])
@@ -1028,7 +1164,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            images = get_UKIDSS_image(ra, dec, 'K', img_size, database)
+            images = next(images_by_band)
             if images:
                 year_r = get_year_obs(images[0][0], date_obs_key, date_pattern)
                 r, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern, images[0][0])
@@ -1075,7 +1211,12 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     print('A problem occurred while downloading UHS catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
-            images = get_UKIDSS_image(ra, dec, 'J', img_size, database)
+            images_by_band = iter(download_images([
+                lambda: get_UKIDSS_image(ra, dec, 'J', img_size, database),
+                lambda: get_UKIDSS_image(ra, dec, 'H', img_size, database),
+                lambda: get_UKIDSS_image(ra, dec, 'K', img_size, database),
+            ]))
+            images = next(images_by_band)
             if images:
                 year_b = get_year_obs(images[0][0], date_obs_key, date_pattern)
                 b, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern, images[0][0])
@@ -1083,7 +1224,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            images = get_UKIDSS_image(ra, dec, 'H', img_size, database)
+            images = next(images_by_band)
             if images:
                 year_g = get_year_obs(images[0][0], date_obs_key, date_pattern)
                 g, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern, images[0][0])
@@ -1091,7 +1232,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            images = get_UKIDSS_image(ra, dec, 'K', img_size, database)
+            images = next(images_by_band)
             if images:
                 year_r = get_year_obs(images[0][0], date_obs_key, date_pattern)
                 r, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern, images[0][0])
@@ -1149,14 +1290,18 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     print(traceback.format_exc())
 
             frame_type = 'tilestack'
-            images = get_VSA_image(ra, dec, 'Y', img_size, database, frame_type)
+            images_by_band = iter(download_images([
+                lambda band=band: get_VSA_image(ra, dec, band, img_size, database, frame_type)
+                for band in ('Y', 'J', 'H', 'Ks')
+            ]))
+            images = next(images_by_band)
             if images:
                 data, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern)
                 survey.append(ImageBucket(data, x, y, 'VHS Y', get_year_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op1, time_obs=time_obs))
             else:
                 survey.append(None)
 
-            images = get_VSA_image(ra, dec, 'J', img_size, database, frame_type)
+            images = next(images_by_band)
             if images:
                 year_b = get_year_obs(images[0][1], date_obs_key, date_pattern)
                 b, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern)
@@ -1164,7 +1309,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            images = get_VSA_image(ra, dec, 'H', img_size, database, frame_type)
+            images = next(images_by_band)
             if images:
                 year_g = get_year_obs(images[0][1], date_obs_key, date_pattern)
                 g, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern)
@@ -1172,7 +1317,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            images = get_VSA_image(ra, dec, 'Ks', img_size, database, frame_type)
+            images = next(images_by_band)
             if images:
                 year_r = get_year_obs(images[0][1], date_obs_key, date_pattern)
                 r, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern)
@@ -1223,21 +1368,25 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     print(traceback.format_exc())
 
             frame_type = 'deep_stack'
-            images = get_VSA_image(ra, dec, 'Z', img_size, database, frame_type)
+            images_by_band = iter(download_images([
+                lambda band=band: get_VSA_image(ra, dec, band, img_size, database, frame_type)
+                for band in ('Z', 'Y', 'J', 'H', 'Ks')
+            ]))
+            images = next(images_by_band)
             if images:
                 data, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern)
                 survey.append(ImageBucket(data, x, y, 'VVV Z', get_year_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op1, time_obs=time_obs))
             else:
                 survey.append(None)
 
-            images = get_VSA_image(ra, dec, 'Y', img_size, database, frame_type)
+            images = next(images_by_band)
             if images:
                 data, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern)
                 survey.append(ImageBucket(data, x, y, 'VVV Y', get_year_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op2, time_obs=time_obs))
             else:
                 survey.append(None)
 
-            images = get_VSA_image(ra, dec, 'J', img_size, database, frame_type)
+            images = next(images_by_band)
             if images:
                 year_b = get_year_obs(images[0][1], date_obs_key, date_pattern)
                 b, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern)
@@ -1245,7 +1394,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            images = get_VSA_image(ra, dec, 'H', img_size, database, frame_type)
+            images = next(images_by_band)
             if images:
                 year_g = get_year_obs(images[0][1], date_obs_key, date_pattern)
                 g, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern)
@@ -1253,7 +1402,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            images = get_VSA_image(ra, dec, 'Ks', img_size, database, frame_type)
+            images = next(images_by_band)
             if images:
                 year_r = get_year_obs(images[0][1], date_obs_key, date_pattern)
                 r, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern)
@@ -1302,21 +1451,25 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     print(traceback.format_exc())
 
             frame_type = 'tilestack'
-            images = get_VSA_image(ra, dec, 'Z', img_size, database, frame_type)
+            images_by_band = iter(download_images([
+                lambda band=band: get_VSA_image(ra, dec, band, img_size, database, frame_type)
+                for band in ('Z', 'Y', 'J', 'H', 'Ks')
+            ]))
+            images = next(images_by_band)
             if images:
                 data, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern)
                 survey.append(ImageBucket(data, x, y, 'VIKING Z', get_year_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op1, time_obs=time_obs))
             else:
                 survey.append(None)
 
-            images = get_VSA_image(ra, dec, 'Y', img_size, database, frame_type)
+            images = next(images_by_band)
             if images:
                 data, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern)
                 survey.append(ImageBucket(data, x, y, 'VIKING Y', get_year_obs(images[0][1], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op2, time_obs=time_obs))
             else:
                 survey.append(None)
 
-            images = get_VSA_image(ra, dec, 'J', img_size, database, frame_type)
+            images = next(images_by_band)
             if images:
                 year_b = get_year_obs(images[0][1], date_obs_key, date_pattern)
                 b, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern)
@@ -1324,7 +1477,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            images = get_VSA_image(ra, dec, 'H', img_size, database, frame_type)
+            images = next(images_by_band)
             if images:
                 year_g = get_year_obs(images[0][1], date_obs_key, date_pattern)
                 g, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern)
@@ -1332,7 +1485,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            images = get_VSA_image(ra, dec, 'Ks', img_size, database, frame_type)
+            images = next(images_by_band)
             if images:
                 year_r = get_year_obs(images[0][1], date_obs_key, date_pattern)
                 r, x, y, wcs, time_obs = process_image_data(images[0][1], date_obs_key, date_pattern)
@@ -1378,16 +1531,18 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             if text and text.count('\n') > 0:
                 table = ascii.read(text)
 
-                images = {}
-
-                for row in table:
+                def get_ps1_image(row):
                     try:
                         download_url = 'http://ps1images.stsci.edu/cgi-bin/fitscut.cgi?format=fits&red={filename}&ra={ra}&dec={dec}&size={size}'
                         download_url = download_url.format(filename=row['filename'], ra=ra, dec=dec, size=img_size * 4)
-                        images[row['filter']] = fits.open(download_file(download_url, cache=cache, show_progress=show_progress, timeout=timeout))
+                        return fits.open(download_file(download_url, cache=cache, show_progress=show_progress, timeout=timeout))
                     except Exception:
                         print('A problem occurred while downloading Pan-STARRS images for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                         print(traceback.format_exc())
+                        return None
+
+                downloaded_images = download_images([lambda row=row: get_ps1_image(row) for row in table])
+                images = {row['filter']: image for row, image in zip(table, downloaded_images) if image is not None}
 
                 if images:
                     if overlays or save_result_tables:
@@ -1495,7 +1650,11 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     print('A problem occurred while downloading DES catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
-            image, instrument = get_DECam_image(ra, dec, 'g', img_size)
+            images_by_band = iter(download_images([
+                lambda band=band: get_DECam_image(ra, dec, band, img_size)
+                for band in ('g', 'r', 'i', 'z', 'Y')
+            ]))
+            image, instrument = next(images_by_band)
             if image:
                 year_b = get_year_obs(image[0], date_obs_key, date_pattern)
                 b, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
@@ -1503,14 +1662,14 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            image, instrument = get_DECam_image(ra, dec, 'r', img_size)
+            image, instrument = next(images_by_band)
             if image:
                 data, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
                 survey.append(ImageBucket(data, x, y, instrument + ' r', get_year_obs(image[0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op2, time_obs=time_obs))
             else:
                 survey.append(None)
 
-            image, instrument = get_DECam_image(ra, dec, 'i', img_size)
+            image, instrument = next(images_by_band)
             if image:
                 year_g = get_year_obs(image[0], date_obs_key, date_pattern)
                 g, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
@@ -1518,14 +1677,14 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            image, instrument = get_DECam_image(ra, dec, 'z', img_size)
+            image, instrument = next(images_by_band)
             if image:
                 data, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
                 survey.append(ImageBucket(data, x, y, instrument + ' z', get_year_obs(image[0], date_obs_key, date_pattern), wcs, overlay_ra, overlay_dec, op4, time_obs=time_obs))
             else:
                 survey.append(None)
 
-            image, instrument = get_DECam_image(ra, dec, 'Y', img_size)
+            image, instrument = next(images_by_band)
             if image:
                 year_r = get_year_obs(image[0], date_obs_key, date_pattern)
                 r, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
@@ -1571,7 +1730,11 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
                     print('A problem occurred while downloading Legacy Surveys catalog entries for object ra={ra}, dec={dec}'.format(ra=ra, dec=dec))
                     print(traceback.format_exc())
 
-            image, instrument = get_legacy_surveys_image(ra, dec, 'g', img_size)
+            images_by_band = iter(download_images([
+                lambda band=band: get_legacy_surveys_image(ra, dec, band, img_size)
+                for band in ('g', 'r', 'i', 'z')
+            ]))
+            image, instrument = next(images_by_band)
             if image:
                 instrument_used = instrument
                 year_b = get_year_obs(image[0], date_obs_key, date_pattern)
@@ -1580,7 +1743,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            image, instrument = get_legacy_surveys_image(ra, dec, 'r', img_size)
+            image, instrument = next(images_by_band)
             if image:
                 instrument_used = instrument
                 year_g = get_year_obs(image[0], date_obs_key, date_pattern)
@@ -1589,7 +1752,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            image, instrument = get_legacy_surveys_image(ra, dec, 'i', img_size)
+            image, instrument = next(images_by_band)
             if image:
                 instrument_used = instrument
                 r, x, y, wcs, time_obs = process_image_data(image[0], date_obs_key, date_pattern)
@@ -1597,7 +1760,7 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             else:
                 survey.append(None)
 
-            image, instrument = get_legacy_surveys_image(ra, dec, 'z', img_size)
+            image, instrument = next(images_by_band)
             if image:
                 instrument_used = instrument
                 year_r = get_year_obs(image[0], date_obs_key, date_pattern)
@@ -1629,8 +1792,11 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
             if epoch_groups:
                 for epoch_year, rows_by_band in epoch_groups:
                     processed = {}
-                    for band, row in rows_by_band.items():
-                        image = download_legacy_surveys_image(row)
+                    downloaded_images = download_images([
+                        lambda row=row: download_legacy_surveys_image(row)
+                        for row in rows_by_band.values()
+                    ])
+                    for (band, row), image in zip(rows_by_band.items(), downloaded_images):
                         if image is None:
                             processed = {}
                             break
@@ -1691,8 +1857,10 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
         # WISE time series
         if neowise:
-            imageW1 = get_neowise_image(ra, dec, epoch=0, band=1, size=img_size)
-            imageW2 = get_neowise_image(ra, dec, epoch=0, band=2, size=img_size)
+            imageW1, imageW2 = download_images([
+                lambda: get_neowise_image(ra, dec, epoch=0, band=1, size=img_size),
+                lambda: get_neowise_image(ra, dec, epoch=0, band=2, size=img_size),
+            ])
             if imageW1 and imageW2:
                 hdu = imageW1[0]
                 header = hdu.header
@@ -1706,8 +1874,10 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
 
                 for i in range(1, 100, 1):
                     try:
-                        imageW1 = get_neowise_image(ra, dec, epoch=i, band=1, size=img_size)
-                        imageW2 = get_neowise_image(ra, dec, epoch=i, band=2, size=img_size)
+                        imageW1, imageW2 = download_images([
+                            lambda: get_neowise_image(ra, dec, epoch=i, band=1, size=img_size),
+                            lambda: get_neowise_image(ra, dec, epoch=i, band=2, size=img_size),
+                        ])
                         if not imageW1 and not imageW2:
                             break
                         hdu = imageW1[0]
@@ -1818,6 +1988,9 @@ def create_finder_charts(ra, dec, img_size=100, overlays=False, overlay_color='r
     # --------------------------------------
 
     warnings.simplefilter('ignore', category=Warning)
+
+    if max_download_workers < 1:
+        raise ValueError('max_download_workers must be at least 1')
 
     if np.isscalar(ra) and np.isscalar(dec):
         finder_charts(ra, dec, targets)
